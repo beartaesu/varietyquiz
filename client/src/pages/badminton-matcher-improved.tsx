@@ -60,7 +60,7 @@ interface MatchHistory {
   [playerName: string]: Set<string>; // 각 플레이어가 함께 게임한 플레이어 이름들
 }
 
-// 매칭 빈도 추적 (개선: 중복 매칭 방지)
+// 매칭 빈도 추적 (더 정교한 추적)
 interface MatchFrequency {
   [key: string]: number; // "playerA-playerB" 형태의 키로 매칭 횟수 저장
 }
@@ -99,6 +99,7 @@ export default function BadmintonMatcherPage() {
     const savedHistory = localStorage.getItem("badminton_history");
     const savedSoloHistory = localStorage.getItem("badminton_solo_history");
     const savedMatchHistory = localStorage.getItem("badminton_match_history");
+    const savedMatchFrequency = localStorage.getItem("badminton_match_frequency");
     const savedExclusionCount = localStorage.getItem("badminton_exclusion_count");
     const savedCourtCount = localStorage.getItem("badminton_court_count");
     
@@ -139,6 +140,14 @@ export default function BadmintonMatcherPage() {
       }
     }
     
+    if (savedMatchFrequency) {
+      try {
+        setMatchFrequency(JSON.parse(savedMatchFrequency));
+      } catch (e) {
+        console.error("Failed to load match frequency", e);
+      }
+    }
+    
     if (savedExclusionCount) {
       try {
         setPlayerExclusionCount(JSON.parse(savedExclusionCount));
@@ -157,38 +166,58 @@ export default function BadmintonMatcherPage() {
     }
   }, []);
 
-  // 플레이어 변경 시 로컬 스토리지에 저장
+  // 로컬 스토리지 저장 (디바운싱 적용)
   useEffect(() => {
-    localStorage.setItem("badminton_players", JSON.stringify(players));
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_players", JSON.stringify(players));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [players]);
 
-  // 히스토리 변경 시 로컬 스토리지에 저장
   useEffect(() => {
-    localStorage.setItem("badminton_history", JSON.stringify(history));
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_history", JSON.stringify(history));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [history]);
 
-  // 솔로 히스토리 변경 시 로컬 스토리지에 저장
   useEffect(() => {
-    localStorage.setItem("badminton_solo_history", JSON.stringify(Array.from(soloHistory)));
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_solo_history", JSON.stringify(Array.from(soloHistory)));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [soloHistory]);
 
-  // 매칭 히스토리 변경 시 로컬 스토리지에 저장
   useEffect(() => {
-    const serializable: Record<string, string[]> = {};
-    Object.keys(matchHistory).forEach(key => {
-      serializable[key] = Array.from(matchHistory[key]);
-    });
-    localStorage.setItem("badminton_match_history", JSON.stringify(serializable));
+    const timer = setTimeout(() => {
+      const serializable: Record<string, string[]> = {};
+      Object.keys(matchHistory).forEach(key => {
+        serializable[key] = Array.from(matchHistory[key]);
+      });
+      localStorage.setItem("badminton_match_history", JSON.stringify(serializable));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [matchHistory]);
 
-  // 제외 횟수 변경 시 로컬 스토리지에 저장
   useEffect(() => {
-    localStorage.setItem("badminton_exclusion_count", JSON.stringify(playerExclusionCount));
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_match_frequency", JSON.stringify(matchFrequency));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [matchFrequency]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_exclusion_count", JSON.stringify(playerExclusionCount));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [playerExclusionCount]);
 
-  // 코트 수 변경 시 로컬 스토리지에 저장
   useEffect(() => {
-    localStorage.setItem("badminton_court_count", JSON.stringify(courtCount));
+    const timer = setTimeout(() => {
+      localStorage.setItem("badminton_court_count", JSON.stringify(courtCount));
+    }, 300);
+    return () => clearTimeout(timer);
   }, [courtCount]);
 
   const addBulkPlayers = () => {
@@ -333,6 +362,23 @@ export default function BadmintonMatcherPage() {
     if (activePlayers.length < 4) {
       alert("휴식 중이 아닌 참가자가 최소 4명 이상이어야 합니다.");
       return;
+    }
+
+    // 혼복 모드 검증
+    if (gameType === "mixed") {
+      const males = activePlayers.filter(p => p.gender === "male");
+      const females = activePlayers.filter(p => p.gender === "female");
+      
+      if (males.length === 0 || females.length === 0) {
+        alert("혼복 모드는 남성과 여성이 각각 최소 1명 이상 필요합니다.");
+        return;
+      }
+      
+      if (males.length < 2 || females.length < 2) {
+        if (!confirm(`남성 ${males.length}명, 여성 ${females.length}명으로 일부 팀은 혼복이 아닐 수 있습니다.\n계속하시겠습니까?`)) {
+          return;
+        }
+      }
     }
 
     // 1. 게임 참여 가능한 총 인원 계산 (4의 배수로 맞춤)
@@ -501,31 +547,43 @@ export default function BadmintonMatcherPage() {
       
       const male = availableMales[0];
       
-      // 각 여성 후보에 대한 점수 계산
+      // 각 여성 후보에 대한 점수 계산 (개선된 알고리즘)
       const scores = availableFemales.map(female => {
-        let score = 100;
+        let score = 1000; // 기본 점수 증가
         
-        // 함께 게임한 적 없으면 보너스 (확률 2배)
+        // 1. 매칭 빈도 기반 페널티 (가장 중요!)
+        const matchCount = getMatchCount(male.name, female.name);
+        score -= matchCount * 300; // 매칭 횟수당 큰 페널티
+        
+        // 2. 최근 매칭 여부 (더 큰 페널티)
         const maleHistory = matchHistory[male.name] || new Set();
-        if (!maleHistory.has(female.name)) {
-          score += 100; // 안 만난 사람 확률 2배
+        if (maleHistory.has(female.name)) {
+          score -= 200; // 한 번이라도 만난 적 있으면 페널티
+        } else {
+          score += 200; // 안 만난 사람 보너스
         }
         
-        // 실력 균형도 고려 (선택적)
+        // 3. 실력 균형도 고려 (선택적)
         if (skillMode === "use") {
           const skillDiff = Math.abs(skillToNumber(male.skill) - skillToNumber(female.skill));
-          score -= skillDiff * 5; // 실력 차이가 적을수록 점수 증가
+          score -= skillDiff * 30; // 실력 차이 페널티
         }
+        
+        // 4. 랜덤 요소 추가 (같은 점수일 때 다양성)
+        score += Math.random() * 50;
         
         return { player: female, score };
       });
       
-      // 점수 기반 가중치 랜덤 선택
-      const totalScore = scores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
-      let random = Math.random() * totalScore;
-      let selectedFemale = scores[0].player;
+      // 점수 기반 가중치 랜덤 선택 (음수 점수 처리)
+      const minScore = Math.min(...scores.map(s => s.score));
+      const adjustedScores = scores.map(s => ({ ...s, score: s.score - minScore + 1 }));
       
-      for (const { player, score } of scores) {
+      const totalScore = adjustedScores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
+      let random = Math.random() * totalScore;
+      let selectedFemale = adjustedScores[0].player;
+      
+      for (const { player, score } of adjustedScores) {
         random -= Math.max(score, 1);
         if (random <= 0) {
           selectedFemale = player;
@@ -552,6 +610,116 @@ export default function BadmintonMatcherPage() {
   };
 
   const createTeamsFromPlayers = (playerList: Player[]): Team[] => {
+    const teams: Team[] = [];
+    const usedPlayers = new Set<number>();
+
+    // 실력 고려 모드 & 밸런스 모드일 때 안 만난 사람 우선 매칭 (개선된 알고리즘)
+    if (skillMode === "use" && balanceTeams) {
+      const playersCopy = [...playerList];
+      
+      while (playersCopy.length - usedPlayers.size >= 2) {
+        const availablePlayers = playersCopy.filter(p => !usedPlayers.has(p.id));
+        if (availablePlayers.length < 2) break;
+
+        const p1 = availablePlayers[0];
+        const candidates = availablePlayers.filter(p => p.id !== p1.id);
+        
+        // 각 후보에 대한 점수 계산 (개선된 알고리즘)
+        const scores = candidates.map(p2 => {
+          let score = 1000; // 기본 점수 증가
+          
+          // 1. 매칭 빈도 기반 페널티 (가장 중요!)
+          const matchCount = getMatchCount(p1.name, p2.name);
+          score -= matchCount * 400; // 매칭 횟수당 큰 페널티
+          
+          // 2. 최근 매칭 여부
+          const p1History = matchHistory[p1.name] || new Set();
+          if (p1History.has(p2.name)) {
+            score -= 250; // 한 번이라도 만난 적 있으면 페널티
+          } else {
+            score += 250; // 안 만난 사람 보너스
+          }
+          
+          // 3. 실력 차등 적용
+          const skillDiff = Math.abs(skillToNumber(p1.skill) - skillToNumber(p2.skill));
+          const p1SkillNum = skillToNumber(p1.skill);
+          const skillBonusMultiplier = 1 + ((5 - p1SkillNum) * 0.2);
+          
+          if (skillDiff > 0 && p1SkillNum > skillToNumber(p2.skill)) {
+            score += skillDiff * 15 * skillBonusMultiplier;
+          }
+          
+          // 4. 실력 균형 (비슷한 실력끼리 보너스)
+          score -= skillDiff * 40;
+          
+          // 5. 랜덤 요소 추가
+          score += Math.random() * 80;
+          
+          return { player: p2, score };
+        });
+        
+        // 점수 기반 가중치 랜덤 선택 (음수 점수 처리)
+        const minScore = Math.min(...scores.map(s => s.score));
+        const adjustedScores = scores.map(s => ({ ...s, score: s.score - minScore + 1 }));
+        
+        const totalScore = adjustedScores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
+        let random = Math.random() * totalScore;
+        let p2 = adjustedScores[0].player;
+        
+        for (const { player, score } of adjustedScores) {
+          random -= Math.max(score, 1);
+          if (random <= 0) {
+            p2 = player;
+            break;
+          }
+        }
+        
+        teams.push({
+          players: [p1, p2],
+          avgSkill: (skillToNumber(p1.skill) + skillToNumber(p2.skill)) / 2
+        });
+        
+        usedPlayers.add(p1.id);
+        usedPlayers.add(p2.id);
+      }
+      
+      // 남은 플레이어 처리 (혼자팀)
+      const remaining = playerList.filter(p => !usedPlayers.has(p.id));
+      remaining.forEach(p => {
+        teams.push({
+          players: [p],
+          avgSkill: skillToNumber(p.skill)
+        });
+        
+        const newSoloHistory = new Set(soloHistory);
+        newSoloHistory.add(p.name);
+        setSoloHistory(newSoloHistory);
+      });
+    } else {
+      // 실력 무시 모드: 랜덤 매칭
+      const shuffled = [...playerList].sort(() => Math.random() - 0.5);
+
+      for (let i = 0; i < shuffled.length; i += 2) {
+        if (i + 1 < shuffled.length) {
+          teams.push({
+            players: [shuffled[i], shuffled[i + 1]],
+            avgSkill: (skillToNumber(shuffled[i].skill) + skillToNumber(shuffled[i + 1].skill)) / 2
+          });
+        } else {
+          teams.push({
+            players: [shuffled[i]],
+            avgSkill: skillToNumber(shuffled[i].skill)
+          });
+          
+          const newSoloHistory = new Set(soloHistory);
+          newSoloHistory.add(shuffled[i].name);
+          setSoloHistory(newSoloHistory);
+        }
+      }
+    }
+
+    return teams;
+  };
     const teams: Team[] = [];
     const usedPlayers = new Set<number>();
 
@@ -682,8 +850,12 @@ export default function BadmintonMatcherPage() {
 
     // 매칭 히스토리 업데이트: 같은 게임에 참여한 플레이어들 기록
     const newMatchHistory = { ...matchHistory };
+    const newMatchFrequency = { ...matchFrequency };
+    
     games.forEach(game => {
       const allPlayers = [...game.team1.players, ...game.team2.players];
+      
+      // 같은 게임에 참여한 모든 플레이어 조합 기록
       allPlayers.forEach(p1 => {
         if (!newMatchHistory[p1.name]) {
           newMatchHistory[p1.name] = new Set();
@@ -691,11 +863,27 @@ export default function BadmintonMatcherPage() {
         allPlayers.forEach(p2 => {
           if (p1.name !== p2.name) {
             newMatchHistory[p1.name].add(p2.name);
+            
+            // 매칭 빈도 증가
+            const key = getMatchKey(p1.name, p2.name);
+            newMatchFrequency[key] = (newMatchFrequency[key] || 0) + 1;
           }
         });
       });
+      
+      // 같은 팀 플레이어들의 매칭 빈도 추가 증가 (더 강한 페널티)
+      [game.team1.players, game.team2.players].forEach(teamPlayers => {
+        for (let i = 0; i < teamPlayers.length; i++) {
+          for (let j = i + 1; j < teamPlayers.length; j++) {
+            const key = getMatchKey(teamPlayers[i].name, teamPlayers[j].name);
+            newMatchFrequency[key] = (newMatchFrequency[key] || 0) + 0.5; // 같은 팀은 추가 0.5
+          }
+        }
+      });
     });
+    
     setMatchHistory(newMatchHistory);
+    setMatchFrequency(newMatchFrequency);
 
     setHistory([entry, ...history]);
     setShowHistory(true);
@@ -709,25 +897,43 @@ export default function BadmintonMatcherPage() {
   };
 
   const clearHistory = () => {
-    if (confirm("모든 기록을 삭제하시겠습니까?")) {
+    if (confirm("모든 기록을 삭제하시겠습니까?\n(매칭 히스토리도 초기화되어 새로운 조합으로 매칭됩니다)")) {
       setHistory([]);
       setSoloHistory(new Set());
       setMatchHistory({});
+      setMatchFrequency({});
       setPlayerExclusionCount({});
       setLastExcludedPlayerIds(new Set());
       setSecondLastExcludedPlayerIds(new Set());
     }
   };
 
-  // 플레이어가 미참여한 총 경기 수 계산
+  // 플레이어가 미참여한 총 경기 수 계산 (개선: 현재 게임 포함)
   const getPlayerExcludedCount = (playerName: string): number => {
     let excludedCount = 0;
+    
+    // 히스토리에서 미참여 횟수 계산
     history.forEach(entry => {
-      // 해당 기록에서 이 플레이어가 제외되었는지 확인
       if (entry.excludedPlayers && entry.excludedPlayers.some(p => p.name === playerName)) {
         excludedCount++;
       }
     });
+    
+    // 현재 게임 구성에서도 제외되었는지 확인
+    if (games.length > 0) {
+      const participatingPlayerIds = new Set<number>();
+      games.forEach(game => {
+        [...game.team1.players, ...game.team2.players].forEach(p => {
+          participatingPlayerIds.add(p.id);
+        });
+      });
+      
+      const player = players.find(p => p.name === playerName);
+      if (player && !participatingPlayerIds.has(player.id) && !player.isResting) {
+        excludedCount++; // 현재 게임에서 제외된 경우 +1
+      }
+    }
+    
     return excludedCount;
   };
 
@@ -1167,8 +1373,35 @@ export default function BadmintonMatcherPage() {
                           {game.team2.players.map(p => `${p.name}(${p.skill})`).join(", ")}
                         </span>
                       </div>
-                      <div className="ml-4 text-sm text-gray-500">
-                        실력차: {Math.abs(game.team1.avgSkill - game.team2.avgSkill).toFixed(1)}
+                      <div className="ml-4 text-sm">
+                        {(() => {
+                          const diff = Math.abs(game.team1.avgSkill - game.team2.avgSkill);
+                          let label = "";
+                          let color = "";
+                          
+                          if (diff <= 0.5) {
+                            label = "완벽한 균형";
+                            color = "text-green-600 font-semibold";
+                          } else if (diff <= 1.0) {
+                            label = "매우 균형";
+                            color = "text-green-500";
+                          } else if (diff <= 1.5) {
+                            label = "균형";
+                            color = "text-blue-500";
+                          } else if (diff <= 2.0) {
+                            label = "약간 불균형";
+                            color = "text-yellow-600";
+                          } else {
+                            label = "불균형";
+                            color = "text-red-500";
+                          }
+                          
+                          return (
+                            <span className={color}>
+                              실력차: {diff.toFixed(1)} ({label})
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1192,25 +1425,71 @@ export default function BadmintonMatcherPage() {
                         이번 게임 미참여 ({nonParticipatingPlayers.length}명)
                       </h3>
                       <div className="flex flex-wrap gap-2">
-                        {nonParticipatingPlayers.map(player => (
-                          <div 
-                            key={player.id}
-                            className="bg-white px-3 py-2 rounded-lg border border-gray-300"
-                          >
-                            <span className="font-semibold text-gray-700">
-                              {player.name} (미참여 {getPlayerExcludedCount(player.name)}회)
-                            </span>
-                            <span className="text-gray-500 text-sm ml-2">
-                              {player.gender === "male" ? "♂" : "♀"} {player.skill}
-                            </span>
-                          </div>
-                        ))}
+                        {nonParticipatingPlayers.map(player => {
+                          const totalExcluded = getPlayerExcludedCount(player.name);
+                          const historyExcluded = totalExcluded - 1; // 현재 게임 제외
+                          
+                          return (
+                            <div 
+                              key={player.id}
+                              className="bg-white px-3 py-2 rounded-lg border border-gray-300"
+                            >
+                              <span className="font-semibold text-gray-700">
+                                {player.name}
+                              </span>
+                              <span className="text-orange-600 text-sm ml-2">
+                                (미참여 {historyExcluded}회 → {totalExcluded}회)
+                              </span>
+                              <span className="text-gray-500 text-sm ml-2">
+                                {player.gender === "male" ? "♂" : "♀"} {player.skill}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 }
                 return null;
               })()}
+
+              {/* 매칭 통계 표시 */}
+              {Object.keys(matchFrequency).length > 0 && (
+                <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <h3 className="text-lg font-bold text-blue-900 mb-3">
+                    📊 매칭 다양성 분석
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="bg-white p-3 rounded-lg">
+                      <p className="text-gray-600 mb-1">총 매칭 조합</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {Object.keys(matchFrequency).length}
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <p className="text-gray-600 mb-1">평균 매칭 횟수</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {(Object.values(matchFrequency).reduce((a, b) => a + b, 0) / Object.keys(matchFrequency).length).toFixed(1)}
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <p className="text-gray-600 mb-1">최대 매칭 횟수</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {Math.max(...Object.values(matchFrequency))}
+                      </p>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <p className="text-gray-600 mb-1">총 게임 수</p>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {history.length}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-3">
+                    💡 매칭 알고리즘이 이전 조합을 기억하여 다양한 상대와 게임할 수 있도록 자동 조정합니다.
+                  </p>
+                </div>
+              )}
 
               <div className="mt-6 flex gap-4 flex-wrap">
                 <Button onClick={generateTeams} className="bg-teal-500 hover:bg-teal-600">
