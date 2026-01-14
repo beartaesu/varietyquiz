@@ -36,7 +36,7 @@ export class MemStorage implements IStorage {
     // Initialize with Korean celebrity data (async)
     this.initializeCelebrityData().catch(console.error);
     
-    // 기본 데이터 초기화 비활성화 - 네이버 API 결과만 사용
+    // 기본 데이터 초기화 비활성화
     // this.initializeBasicData();
   }
 
@@ -65,51 +65,8 @@ export class MemStorage implements IStorage {
     });
   }
 
-  private async searchNaverImage(query: string): Promise<string | null> {
-    try {
-      const clientId = process.env.NAVER_CLIENT_ID;
-      const clientSecret = process.env.NAVER_CLIENT_SECRET;
-      
-      if (!clientId || !clientSecret) {
-        console.warn('Naver API credentials not found, using placeholder image');
-        return null;
-      }
-
-      const searchQuery = `${query} 연예인 공식사진`;
-      const url = `https://openapi.naver.com/v1/search/image?query=${encodeURIComponent(searchQuery)}&display=5&sort=sim`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'X-Naver-Client-Id': clientId,
-          'X-Naver-Client-Secret': clientSecret,
-        },
-      });
-
-      if (!response.ok) {
-        console.error('Naver API error:', response.status, response.statusText);
-        return null;
-      }
-
-      const data = await response.json();
-      
-      if (data.items && data.items.length > 0) {
-        // 첫 번째 이미지를 선택하되, .jpg나 .png 확장자가 있는 것을 우선
-        const validImage = data.items.find((item: any) => 
-          item.link && (item.link.includes('.jpg') || item.link.includes('.png') || item.link.includes('.jpeg'))
-        ) || data.items[0];
-        
-        return validImage.link;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error searching Naver image:', error);
-      return null;
-    }
-  }
-
   private async initializeCelebrityData() {
-    console.log('🔍 네이버 API를 사용해서 실제 연예인 이미지 수집 중...');
+    console.log('🔍 연예인 이미지 데이터 초기화 중...');
     
     // 기존 연예인 데이터 모두 삭제 (중복 방지)
     this.celebrities.clear();
@@ -373,44 +330,6 @@ export class DbStorage implements IStorage {
       console.log(`🎉 사용자 제공 256명 연예인 데이터베이스 구축 완료! 총 ${finalCount}명`);
     } catch (error) {
       console.error('❌ 연예인 데이터 초기화 실패:', error);
-    }
-  }
-
-  private async searchNaverImage(query: string): Promise<string | null> {
-    try {
-      const clientId = process.env.NAVER_CLIENT_ID;
-      const clientSecret = process.env.NAVER_CLIENT_SECRET;
-      
-      if (!clientId || !clientSecret) {
-        return null;
-      }
-
-      const searchQuery = `${query} 연예인 공식사진`;
-      const url = `https://openapi.naver.com/v1/search/image?query=${encodeURIComponent(searchQuery)}&display=5&sort=sim`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'X-Naver-Client-Id': clientId,
-          'X-Naver-Client-Secret': clientSecret,
-        },
-      });
-
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      
-      if (data.items && data.items.length > 0) {
-        const validImage = data.items.find((item: any) => 
-          item.link && (item.link.includes('.jpg') || item.link.includes('.png') || item.link.includes('.jpeg'))
-        ) || data.items[0];
-        
-        return validImage.link;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error(`Error searching image for ${query}:`, error);
-      return null;
     }
   }
 
