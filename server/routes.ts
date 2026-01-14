@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage-simple";
 import { ObjectStorageService } from "./objectStorage";
 
 // 이미지 프록시 엔드포인트 - CORS/Mixed Content 문제 해결
@@ -51,49 +51,6 @@ async function setupImageProxy(app: Express) {
   });
 }
 
-// 네이버 이미지 검색 테스트 엔드포인트
-async function testNaverImageSearch(app: Express) {
-  app.get('/api/test-naver/:query', async (req, res) => {
-    try {
-      const query = req.params.query;
-      const clientId = process.env.NAVER_CLIENT_ID;
-      const clientSecret = process.env.NAVER_CLIENT_SECRET;
-      
-      if (!clientId || !clientSecret) {
-        return res.status(500).json({ error: 'Naver API credentials not found' });
-      }
-
-      const searchQuery = `${query} 연예인 공식사진`;
-      const url = `https://openapi.naver.com/v1/search/image?query=${encodeURIComponent(searchQuery)}&display=3&sort=sim`;
-      
-      console.log(`🔍 네이버 이미지 검색: "${searchQuery}"`);
-      
-      const response = await fetch(url, {
-        headers: {
-          'X-Naver-Client-Id': clientId,
-          'X-Naver-Client-Secret': clientSecret,
-        },
-      });
-
-      if (!response.ok) {
-        console.error('Naver API error:', response.status, response.statusText);
-        return res.status(response.status).json({ error: 'Naver API error' });
-      }
-
-      const data = await response.json();
-      console.log(`✅ 네이버 이미지 검색 결과: ${data.items?.length || 0}개 이미지`);
-      
-      res.json({
-        query: searchQuery,
-        total: data.total,
-        items: data.items?.slice(0, 3) || []
-      });
-    } catch (error) {
-      console.error('Error in naver test:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-}
 import { insertQuizSessionSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -179,8 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupObjectStorage(app);
   // 이미지 프록시 등록
   await setupImageProxy(app);
-  // 네이버 이미지 검색 테스트 엔드포인트 등록
-  await testNaverImageSearch(app);
+  
   // Celebrity routes
   app.get("/api/celebrities", async (req, res) => {
     try {
