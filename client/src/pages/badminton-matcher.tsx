@@ -343,7 +343,7 @@ export default function BadmintonMatcherPage() {
     }
     const excludeCount = activePlayers.length - maxParticipants;
 
-    // 2. 미참여자 선택: 최소 횟수부터 채워가기 (0회 우선 → 부족하면 1회 추가)
+    // 2. 미참여자 선택: 완전 공평한 방식 (0회 우선 → 1회 → 2회...)
     let excludedPlayers: Player[] = [];
     if (excludeCount > 0) {
       // 모든 플레이어를 미참여 횟수별로 그룹화
@@ -359,26 +359,37 @@ export default function BadmintonMatcherPage() {
       // 미참여 횟수를 오름차순으로 정렬
       const sortedCounts = Object.keys(groupedByCount).map(Number).sort((a, b) => a - b);
       
-      // 최소 횟수부터 순차적으로 채워가기
+      // 최소 횟수부터 순차적으로 채워가기 (완전 랜덤)
       for (const count of sortedCounts) {
         if (excludedPlayers.length >= excludeCount) break;
         
         const candidates = groupedByCount[count];
-        const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+        // 더 강력한 랜덤 셔플 (3번 섞기)
+        let shuffled = [...candidates];
+        for (let i = 0; i < 3; i++) {
+          shuffled = shuffled.sort(() => Math.random() - 0.5);
+        }
+        
         const needed = excludeCount - excludedPlayers.length;
         
-        // 필요한 만큼만 선택 (부족하면 전체 선택)
+        // 필요한 만큼만 선택
         const selected = shuffled.slice(0, needed);
         excludedPlayers.push(...selected);
       }
+      
+      console.log(`🎯 휴식 배정: ${excludedPlayers.map(p => `${p.name}(${playerExclusionCount[p.id] || 0}회)`).join(', ')}`);
     }
 
     // 6. 게임 참여 플레이어
     const excludedIds = new Set(excludedPlayers.map(p => p.id));
     let availablePlayers = activePlayers.filter(p => !excludedIds.has(p.id));
 
-    // 6. 참여 플레이어를 랜덤하게 섞기
-    availablePlayers = availablePlayers.sort(() => Math.random() - 0.5);
+    // 7. 참여 플레이어를 강력하게 랜덤 섞기 (5번 섞기)
+    for (let i = 0; i < 5; i++) {
+      availablePlayers = availablePlayers.sort(() => Math.random() - 0.5);
+    }
+    
+    console.log(`🎮 게임 참여: ${availablePlayers.map(p => p.name).join(', ')}`);
 
     let teams: Team[] = [];
 
@@ -489,8 +500,13 @@ export default function BadmintonMatcherPage() {
     const usedMales = new Set<number>();
     const usedFemales = new Set<number>();
     
-    const malesCopy = [...males];
-    const femalesCopy = [...females];
+    // 강력한 랜덤 섞기
+    let malesCopy = [...males];
+    let femalesCopy = [...females];
+    for (let i = 0; i < 3; i++) {
+      malesCopy = malesCopy.sort(() => Math.random() - 0.5);
+      femalesCopy = femalesCopy.sort(() => Math.random() - 0.5);
+    }
     
     // 각 남성에 대해 여성 파트너를 찾기
     while (malesCopy.length > usedMales.size && femalesCopy.length > usedFemales.size) {
@@ -505,10 +521,10 @@ export default function BadmintonMatcherPage() {
       const scores = availableFemales.map(female => {
         let score = 100;
         
-        // 함께 게임한 적 없으면 보너스 (확률 2배)
+        // 함께 게임한 적 없으면 큰 보너스 (확률 3배)
         const maleHistory = matchHistory[male.name] || new Set();
         if (!maleHistory.has(female.name)) {
-          score += 100; // 안 만난 사람 확률 2배
+          score += 200; // 안 만난 사람 확률 3배로 증가
         }
         
         // 실력 균형도 고려 (선택적)
@@ -516,6 +532,9 @@ export default function BadmintonMatcherPage() {
           const skillDiff = Math.abs(skillToNumber(male.skill) - skillToNumber(female.skill));
           score -= skillDiff * 5; // 실력 차이가 적을수록 점수 증가
         }
+        
+        // 랜덤 요소 추가 (±30점)
+        score += Math.random() * 60 - 30;
         
         return { player: female, score };
       });
@@ -555,16 +574,20 @@ export default function BadmintonMatcherPage() {
     const teams: Team[] = [];
     const usedPlayers = new Set<number>();
 
+    // 강력한 랜덤 섞기 (3번)
+    let playersCopy = [...playerList];
+    for (let i = 0; i < 3; i++) {
+      playersCopy = playersCopy.sort(() => Math.random() - 0.5);
+    }
+
     // 실력 고려 모드 & 밸런스 모드일 때 안 만난 사람 우선 매칭
     if (skillMode === "use" && balanceTeams) {
-      const playersCopy = [...playerList];
-      
       while (playersCopy.length - usedPlayers.size >= 2) {
         // 아직 팀에 배정되지 않은 플레이어 찾기
         const availablePlayers = playersCopy.filter(p => !usedPlayers.has(p.id));
         if (availablePlayers.length < 2) break;
 
-        // 첫 번째 플레이어 선택 (이미 제외 횟수 기준으로 정렬되어 있으므로 첫 번째 선택)
+        // 첫 번째 플레이어 선택
         const p1 = availablePlayers[0];
         
         // p1과 함께 팀을 이룰 p2 선택
@@ -574,34 +597,35 @@ export default function BadmintonMatcherPage() {
         const scores = candidates.map(p2 => {
           let score = 100;
           
-          // 1. 함께 게임한 적 없으면 보너스 (확률 2배)
+          // 1. 함께 게임한 적 없으면 큰 보너스 (확률 3배)
           const p1History = matchHistory[p1.name] || new Set();
           if (!p1History.has(p2.name)) {
-            score += 100; // 안 만난 사람 확률 2배
+            score += 200; // 안 만난 사람 확률 3배로 증가
           }
           
-          // 2. 실력 차등 적용 (A는 20%, 입문은 120%)
+          // 2. 실력 차등 적용
           const skillDiff = Math.abs(skillToNumber(p1.skill) - skillToNumber(p2.skill));
           const p1SkillNum = skillToNumber(p1.skill);
           
-          // A(5)는 20%, B(4)는 40%, C(3)는 60%, D(2)는 80%, E(1)는 100%, 입문(0)은 120%
-          const skillBonusMultiplier = 1 + ((5 - p1SkillNum) * 0.2);
-          
           // 실력 차이가 클수록 낮은 실력자는 점수 증가
           if (skillDiff > 0 && p1SkillNum > skillToNumber(p2.skill)) {
+            const skillBonusMultiplier = 1 + ((5 - p1SkillNum) * 0.2);
             score += skillDiff * 10 * skillBonusMultiplier;
           }
+          
+          // 3. 랜덤 요소 추가 (±40점)
+          score += Math.random() * 80 - 40;
           
           return { player: p2, score };
         });
         
         // 점수 기반 가중치 랜덤 선택
-        const totalScore = scores.reduce((sum, s) => sum + s.score, 0);
+        const totalScore = scores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
         let random = Math.random() * totalScore;
         let p2 = scores[0].player;
         
         for (const { player, score } of scores) {
-          random -= score;
+          random -= Math.max(score, 1);
           if (random <= 0) {
             p2 = player;
             break;
