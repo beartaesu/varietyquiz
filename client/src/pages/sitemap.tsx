@@ -5,9 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSEO } from "@/hooks/use-seo";
 import { AdSenseDisplay } from "@/components/AdSense";
 import { Footer } from "@/components/Footer";
-import boardGameCollection from "@assets/generated_images/Colorful_board_game_collection_b62010fc.png";
-import boardGamePieces from "@assets/generated_images/Board_game_pieces_variety_5429783a.png";
-import quizShowGame from "@assets/generated_images/Quiz_show_board_game_227373d9.png";
+// Images temporarily disabled for deployment
+// import boardGameCollection from "@assets/generated_images/Colorful_board_game_collection_b62010fc.png";
+// import boardGamePieces from "@assets/generated_images/Board_game_pieces_variety_5429783a.png";
+// import quizShowGame from "@assets/generated_images/Quiz_show_board_game_227373d9.png";
 
 export default function SitemapPage() {
   const [, setLocation] = useLocation();
@@ -102,28 +103,12 @@ export default function SitemapPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary to-secondary p-4 py-8 relative overflow-hidden">
-      {/* 배경 보드게임 이미지들 */}
+      {/* 배경 장식 요소들 - 임시로 CSS로 대체 */}
       <div className="absolute inset-0 opacity-10">
-        <img 
-          src={boardGameCollection} 
-          alt="보드게임 배경" 
-          className="absolute top-10 left-10 w-48 h-32 object-cover rounded-lg transform rotate-12"
-        />
-        <img 
-          src={boardGamePieces} 
-          alt="게임 조각들" 
-          className="absolute top-20 right-10 w-40 h-30 object-cover rounded-lg transform -rotate-6"
-        />
-        <img 
-          src={quizShowGame} 
-          alt="퀴즈 게임" 
-          className="absolute bottom-20 left-20 w-36 h-36 object-cover rounded-full transform rotate-45"
-        />
-        <img 
-          src={boardGameCollection} 
-          alt="보드게임" 
-          className="absolute bottom-10 right-20 w-44 h-28 object-cover rounded-lg transform -rotate-12"
-        />
+        <div className="absolute top-10 left-10 w-48 h-32 bg-gradient-to-r from-blue-400 to-purple-500 rounded-lg transform rotate-12"></div>
+        <div className="absolute top-20 right-10 w-40 h-30 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg transform -rotate-6"></div>
+        <div className="absolute bottom-20 left-20 w-36 h-36 bg-gradient-to-r from-pink-400 to-red-500 rounded-full transform rotate-45"></div>
+        <div className="absolute bottom-10 right-20 w-44 h-28 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg transform -rotate-12"></div>
       </div>
       
       <div className="max-w-6xl w-full mx-auto relative z-10">
