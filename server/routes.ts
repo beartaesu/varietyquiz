@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage-simple";
+import { storage } from "./storage";
 import { ObjectStorageService } from "./objectStorage";
 
 // 이미지 프록시 엔드포인트 - CORS/Mixed Content 문제 해결
@@ -136,7 +136,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupObjectStorage(app);
   // 이미지 프록시 등록
   await setupImageProxy(app);
-  
   // Celebrity routes
   app.get("/api/celebrities", async (req, res) => {
     try {
