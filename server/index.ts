@@ -63,8 +63,9 @@ app.use((req, res, next) => {
   });
 
   // static 파일 서빙 설정 (개발/프로덕션 모두)
-  app.use(express.static(path.resolve(import.meta.dirname, '../public')));
-  app.use('/images', express.static(path.resolve(import.meta.dirname, '../public/images')));
+  const dirname = import.meta.dirname || path.dirname(new URL(import.meta.url).pathname);
+  app.use(express.static(path.resolve(dirname, '../public')));
+  app.use('/images', express.static(path.resolve(dirname, '../public/images')));
   
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route

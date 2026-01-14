@@ -68,7 +68,9 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Use __dirname fallback for production builds where import.meta.dirname might be undefined
+  const dirname = import.meta.dirname || path.dirname(new URL(import.meta.url).pathname);
+  const distPath = path.resolve(dirname, "public");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
