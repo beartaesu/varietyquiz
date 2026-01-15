@@ -99,6 +99,7 @@ export default function BadmintonMatcherPage() {
     const savedHistory = localStorage.getItem("badminton_history");
     const savedSoloHistory = localStorage.getItem("badminton_solo_history");
     const savedMatchHistory = localStorage.getItem("badminton_match_history");
+    const savedMatchFrequency = localStorage.getItem("badminton_match_frequency");
     const savedExclusionCount = localStorage.getItem("badminton_exclusion_count");
     const savedCourtCount = localStorage.getItem("badminton_court_count");
     
@@ -136,6 +137,14 @@ export default function BadmintonMatcherPage() {
         setMatchHistory(restored);
       } catch (e) {
         console.error("Failed to load match history", e);
+      }
+    }
+    
+    if (savedMatchFrequency) {
+      try {
+        setMatchFrequency(JSON.parse(savedMatchFrequency));
+      } catch (e) {
+        console.error("Failed to load match frequency", e);
       }
     }
     
@@ -180,6 +189,11 @@ export default function BadmintonMatcherPage() {
     });
     localStorage.setItem("badminton_match_history", JSON.stringify(serializable));
   }, [matchHistory]);
+
+  // 매칭 빈도 변경 시 로컬 스토리지에 저장
+  useEffect(() => {
+    localStorage.setItem("badminton_match_frequency", JSON.stringify(matchFrequency));
+  }, [matchFrequency]);
 
   // 제외 횟수 변경 시 로컬 스토리지에 저장
   useEffect(() => {
@@ -721,6 +735,19 @@ export default function BadmintonMatcherPage() {
     });
     setMatchHistory(newMatchHistory);
 
+    // ⭐ 매칭 빈도 업데이트: 같은 게임에 참여한 모든 플레이어 쌍의 매칭 횟수 증가
+    const newMatchFrequency = { ...matchFrequency };
+    games.forEach(game => {
+      const allPlayers = [...game.team1.players, ...game.team2.players];
+      for (let i = 0; i < allPlayers.length; i++) {
+        for (let j = i + 1; j < allPlayers.length; j++) {
+          const key = getMatchKey(allPlayers[i].name, allPlayers[j].name);
+          newMatchFrequency[key] = (newMatchFrequency[key] || 0) + 1;
+        }
+      }
+    });
+    setMatchFrequency(newMatchFrequency);
+
     setHistory([entry, ...history]);
     setShowHistory(true);
     alert("게임 구성이 기록에 저장되었습니다.");
@@ -737,6 +764,7 @@ export default function BadmintonMatcherPage() {
       setHistory([]);
       setSoloHistory(new Set());
       setMatchHistory({});
+      setMatchFrequency({});
       setPlayerExclusionCount({});
       setLastExcludedPlayerIds(new Set());
       setSecondLastExcludedPlayerIds(new Set());
