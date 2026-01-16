@@ -533,32 +533,33 @@ export default function BadmintonMatcherPage() {
       
       // 각 여성 후보에 대한 점수 계산
       const scores = availableFemales.map(female => {
-        let score = 100;
+        let score = 1000;
         
-        // 함께 게임한 적 없으면 큰 보너스 (확률 3배)
-        const maleHistory = matchHistory[male.name] || new Set();
-        if (!maleHistory.has(female.name)) {
-          score += 200; // 안 만난 사람 확률 3배로 증가
-        }
+        // ⭐ 핵심: 같은 게임 참여 횟수가 적을수록 높은 점수
+        const matchCount = getMatchCount(male.name, female.name);
+        score -= matchCount * 500; // 함께 게임한 횟수당 큰 페널티
         
         // 실력 균형도 고려 (선택적)
         if (skillMode === "use") {
           const skillDiff = Math.abs(skillToNumber(male.skill) - skillToNumber(female.skill));
-          score -= skillDiff * 5; // 실력 차이가 적을수록 점수 증가
+          score -= skillDiff * 30;
         }
         
-        // 랜덤 요소 추가 (±30점)
-        score += Math.random() * 60 - 30;
+        // 랜덤 요소 추가
+        score += Math.random() * 100;
         
         return { player: female, score };
       });
       
-      // 점수 기반 가중치 랜덤 선택
-      const totalScore = scores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
-      let random = Math.random() * totalScore;
-      let selectedFemale = scores[0].player;
+      // 점수 기반 가중치 랜덤 선택 (음수 점수 처리)
+      const minScore = Math.min(...scores.map(s => s.score));
+      const adjustedScores = scores.map(s => ({ ...s, score: s.score - minScore + 1 }));
       
-      for (const { player, score } of scores) {
+      const totalScore = adjustedScores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
+      let random = Math.random() * totalScore;
+      let selectedFemale = adjustedScores[0].player;
+      
+      for (const { player, score } of adjustedScores) {
         random -= Math.max(score, 1);
         if (random <= 0) {
           selectedFemale = player;
@@ -609,15 +610,13 @@ export default function BadmintonMatcherPage() {
         
         // 각 후보에 대한 점수 계산
         const scores = candidates.map(p2 => {
-          let score = 100;
+          let score = 1000;
           
-          // 1. 함께 게임한 적 없으면 큰 보너스 (확률 3배)
-          const p1History = matchHistory[p1.name] || new Set();
-          if (!p1History.has(p2.name)) {
-            score += 200; // 안 만난 사람 확률 3배로 증가
-          }
+          // ⭐ 핵심: 같은 게임 참여 횟수가 적을수록 높은 점수
+          const matchCount = getMatchCount(p1.name, p2.name);
+          score -= matchCount * 500; // 함께 게임한 횟수당 큰 페널티
           
-          // 2. 실력 차등 적용
+          // 실력 차등 적용
           const skillDiff = Math.abs(skillToNumber(p1.skill) - skillToNumber(p2.skill));
           const p1SkillNum = skillToNumber(p1.skill);
           
@@ -627,18 +626,21 @@ export default function BadmintonMatcherPage() {
             score += skillDiff * 10 * skillBonusMultiplier;
           }
           
-          // 3. 랜덤 요소 추가 (±40점)
-          score += Math.random() * 80 - 40;
+          // 랜덤 요소 추가
+          score += Math.random() * 100;
           
           return { player: p2, score };
         });
         
-        // 점수 기반 가중치 랜덤 선택
-        const totalScore = scores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
-        let random = Math.random() * totalScore;
-        let p2 = scores[0].player;
+        // 점수 기반 가중치 랜덤 선택 (음수 점수 처리)
+        const minScore = Math.min(...scores.map(s => s.score));
+        const adjustedScores = scores.map(s => ({ ...s, score: s.score - minScore + 1 }));
         
-        for (const { player, score } of scores) {
+        const totalScore = adjustedScores.reduce((sum, s) => sum + Math.max(s.score, 1), 0);
+        let random = Math.random() * totalScore;
+        let p2 = adjustedScores[0].player;
+        
+        for (const { player, score } of adjustedScores) {
           random -= Math.max(score, 1);
           if (random <= 0) {
             p2 = player;
