@@ -27,17 +27,18 @@ export default function BracketCategoriesPage() {
       link: "/bracket/badminton"
     },
     {
+      id: "worldcup",
+      title: "취향 월드컵",
+      emoji: "🏆",
+      description: "나만의 이상형 월드컵을 만들고 플레이하세요",
+      available: true,
+      link: "/bracket/worldcup"
+    },
+    {
       id: "coming1",
       title: "준비중",
       emoji: "🎯",
       description: "곧 새로운 서비스가 출시됩니다",
-      available: false
-    },
-    {
-      id: "coming2",
-      title: "준비중",
-      emoji: "🏆",
-      description: "기대해주세요!",
       available: false
     }
   ];

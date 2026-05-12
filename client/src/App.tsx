@@ -10,6 +10,8 @@ import QuizGamePage from "@/pages/quiz-game";
 import CategoryInfoPage from "@/pages/category-info";
 import BracketCategoriesPage from "@/pages/bracket-categories";
 import BadmintonMatcherPage from "@/pages/badminton-matcher";
+import WorldCupCreatePage from "@/pages/worldcup-create";
+import WorldCupPlayPage from "@/pages/worldcup-play";
 
 function Router() {
   return (
@@ -18,6 +20,8 @@ function Router() {
       <Route path="/sitemap" component={SitemapPage} />
       <Route path="/bracket" component={BracketCategoriesPage} />
       <Route path="/bracket/badminton" component={BadmintonMatcherPage} />
+      <Route path="/bracket/worldcup" component={WorldCupCreatePage} />
+      <Route path="/bracket/worldcup/play" component={WorldCupPlayPage} />
       <Route path="/quiz" component={QuizGamePage} />
       <Route path="/category/:category">
         {(params) => <CategoryInfoPage category={params.category} />}
