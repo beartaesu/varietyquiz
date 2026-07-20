@@ -30,6 +30,27 @@ export default function WorldCupPlayPage() {
   });
 
   useEffect(() => {
+    // URL 파라미터에서 공유 데이터 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedData = urlParams.get("data");
+
+    if (sharedData) {
+      // 공유 링크로 접속한 경우
+      try {
+        const decoded = decodeURIComponent(atob(sharedData));
+        const data = deserializeWorldCupData(decoded);
+        if (data) {
+          localStorage.setItem("worldcup_current", decoded);
+          setWorldCupData(data);
+          startTournament(data);
+          return;
+        }
+      } catch (e) {
+        console.error("공유 데이터 파싱 실패:", e);
+      }
+    }
+
+    // localStorage에서 로드
     const saved = localStorage.getItem("worldcup_current");
     if (!saved) {
       alert("월드컵 데이터가 없습니다. 먼저 월드컵을 만들어주세요.");

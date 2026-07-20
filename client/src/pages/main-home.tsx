@@ -16,12 +16,12 @@ export default function MainHomePage() {
 
   const services = [
     {
-      id: "bracket",
-      title: "대진표 작성",
-      emoji: "📊",
-      description: "토너먼트 대진표를 쉽게 작성하고 관리하세요",
+      id: "worldcup",
+      title: "취향 월드컵",
+      emoji: "🏆",
+      description: "나만의 이상형 월드컵을 만들고 플레이하세요",
       available: true,
-      link: "/bracket"
+      link: "/bracket/worldcup"
     },
     {
       id: "quiz",
@@ -32,17 +32,18 @@ export default function MainHomePage() {
       link: "/sitemap"
     },
     {
+      id: "badminton",
+      title: "배드민턴 매칭",
+      emoji: "🏸",
+      description: "배드민턴 팀을 공정하게 매칭하세요",
+      available: true,
+      link: "/bracket/badminton"
+    },
+    {
       id: "coming1",
       title: "Coming Soon",
       emoji: "🎯",
       description: "곧 새로운 서비스가 출시됩니다",
-      available: false
-    },
-    {
-      id: "coming2",
-      title: "Coming Soon",
-      emoji: "🏆",
-      description: "기대해주세요!",
       available: false
     }
   ];

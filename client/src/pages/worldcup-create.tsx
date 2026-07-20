@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSEO } from "@/hooks/use-seo";
 import { Footer } from "@/components/Footer";
-import { Home, Plus, Trash2, Image, Play, Copy } from "lucide-react";
+import { Home, Plus, Trash2, Image, Play, Copy, Search, Loader2, ExternalLink, X } from "lucide-react";
 import {
   WorldCupItem,
   addItem,
@@ -14,6 +14,7 @@ import {
   validateImageFile,
   serializeWorldCupData,
 } from "@/lib/worldcup-logic";
+import { saveMyWorldCup } from "@/lib/worldcup-library";
 
 export default function WorldCupCreatePage() {
   const [, setLocation] = useLocation();
@@ -22,6 +23,13 @@ export default function WorldCupCreatePage() {
   const [newItemName, setNewItemName] = useState("");
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [searchTargetId, setSearchTargetId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [imageResults, setImageResults] = useState<Array<{ title: string; link: string; thumbnail: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [fallbackUrl, setFallbackUrl] = useState("");
 
   useSEO({
     title: "취향 월드컵 만들기",
@@ -90,6 +98,57 @@ export default function WorldCupCreatePage() {
     setItems(prev => [...prev, newItem]);
   };
 
+  const searchImages = async (itemId: number, query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setSearchTargetId(itemId);
+    setSearchQuery(trimmed);
+    setImageResults([]);
+    setSearchError("");
+    setFallbackUrl("");
+    setSearching(true);
+    try {
+      const response = await fetch(`/api/image-search?q=${encodeURIComponent(trimmed)}`);
+      const data = await response.json();
+      if (!response.ok) {
+        setSearchError(data.message || "이미지 검색에 실패했습니다.");
+        setFallbackUrl(data.fallbackUrl || `https://search.naver.com/search.naver?where=image&query=${encodeURIComponent(trimmed)}`);
+        return;
+      }
+      setImageResults(data.items || []);
+      if (!data.items?.length) setSearchError("검색된 이미지가 없습니다.");
+    } catch {
+      setSearchError("이미지 검색 서버에 연결할 수 없습니다.");
+      setFallbackUrl(`https://search.naver.com/search.naver?where=image&query=${encodeURIComponent(trimmed)}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectSearchedImage = async (imageUrl: string) => {
+    if (searchTargetId === null) return;
+    setUploadingImage(true);
+    setSearchError("");
+    try {
+      const response = await fetch(`/api/image-proxy?url=${encodeURIComponent(imageUrl)}`);
+      if (!response.ok) throw new Error("이미지를 가져올 수 없습니다.");
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      setItems(prev => prev.map(item => item.id === searchTargetId ? { ...item, imageUrl: base64 } : item));
+      setSearchTargetId(null);
+      setImageResults([]);
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : "이미지 등록에 실패했습니다.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleAddItem = () => {
     if (!newItemName.trim()) {
       alert("항목 이름을 입력해주세요.");
@@ -102,8 +161,10 @@ export default function WorldCupCreatePage() {
       return;
     }
 
+    const addedItem = result[result.length - 1];
     setItems(result);
     setNewItemName("");
+    void searchImages(addedItem.id, addedItem.name);
   };
 
   const handleRemoveItem = (id: number) => {
@@ -143,11 +204,12 @@ export default function WorldCupCreatePage() {
     };
 
     localStorage.setItem("worldcup_current", serializeWorldCupData(worldCupData));
+    saveMyWorldCup(worldCupData);
     setLocation("/bracket/worldcup/play");
   };
 
-  // 공유 코드 생성
-  const generateShareCode = () => {
+  // 공유 링크 생성
+  const generateShareLink = (round: number) => {
     if (!title.trim()) {
       alert("월드컵 제목을 입력해주세요.");
       return;
@@ -159,14 +221,23 @@ export default function WorldCupCreatePage() {
       return;
     }
 
+    // 공유용 데이터 (이미지 제외 - URL 길이 제한)
+    const shareItems = validItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      imageUrl: "" // 이미지는 공유 시 제외
+    }));
+
     const worldCupData = {
       title: title.trim(),
-      items: validItems,
+      items: shareItems,
+      round,
       createdAt: new Date().toISOString()
     };
 
-    const code = btoa(encodeURIComponent(JSON.stringify(worldCupData)));
-    setGeneratedCode(code);
+    const encoded = btoa(encodeURIComponent(JSON.stringify(worldCupData)));
+    const shareUrl = `${window.location.origin}/bracket/worldcup/play?data=${encoded}`;
+    setGeneratedCode(shareUrl);
   };
 
   const copyCode = async () => {
@@ -187,7 +258,7 @@ export default function WorldCupCreatePage() {
         <div className="mb-8 flex justify-between items-center">
           <Button
             variant="outline"
-            onClick={() => setLocation("/bracket")}
+            onClick={() => setLocation("/bracket/worldcup")}
             className="bg-white/20 backdrop-blur-sm text-white border-white/40 hover:bg-white/30"
           >
             <Home className="w-4 h-4 mr-2" />
@@ -248,7 +319,7 @@ export default function WorldCupCreatePage() {
 
                 {/* 이미지 미리보기 */}
                 {item.imageUrl ? (
-                  <div className="relative w-16 h-16 flex-shrink-0">
+                  <div className="relative w-16 h-16 flex-shrink-0 group">
                     <img
                       src={item.imageUrl}
                       alt={item.name}
@@ -260,17 +331,24 @@ export default function WorldCupCreatePage() {
                     >
                       ×
                     </button>
+                    <button
+                      onClick={() => searchImages(item.id, item.name)}
+                      title="네이버 이미지에서 교체"
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg bg-black/70 text-white flex items-center justify-center"
+                    >
+                      <Search className="w-5 h-5" />
+                    </button>
                   </div>
                 ) : (
-                  <label className="w-16 h-16 flex-shrink-0 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-pink-400 transition-colors">
-                    <Image className="w-5 h-5 text-gray-400" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleFileSelect(e, item.id)}
-                    />
-                  </label>
+                  <div className="w-16 flex-shrink-0 space-y-1">
+                    <button onClick={() => searchImages(item.id, item.name)} title="네이버 이미지 검색" className="w-16 h-10 border border-gray-300 rounded-lg flex items-center justify-center">
+                      <Search className="w-4 h-4" />
+                    </button>
+                    <label className="w-16 h-7 border border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer" title="내 파일 업로드">
+                      <Image className="w-3.5 h-3.5" />
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileSelect(e, item.id)} />
+                    </label>
+                  </div>
                 )}
 
                 {/* 이름 입력 */}
@@ -331,6 +409,99 @@ export default function WorldCupCreatePage() {
             }
           </p>
         </div>
+
+        {/* Share Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-xl mb-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">🔗 공유하기</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            공유 링크를 만들면 다른 사람도 이 월드컵을 플레이할 수 있어요!
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[8, 16, 32, 64].map(round => {
+              const validCount = getValidItems(items).length;
+              const disabled = validCount < round;
+              return (
+                <Button
+                  key={`share-${round}`}
+                  onClick={() => generateShareLink(round)}
+                  disabled={disabled}
+                  variant="outline"
+                  className={`h-12 text-sm font-bold ${
+                    disabled ? "opacity-40" : "border-pink-300 text-pink-600 hover:bg-pink-50"
+                  }`}
+                >
+                  <Copy className="w-4 h-4 mr-1" />
+                  {round}강 링크
+                </Button>
+              );
+            })}
+          </div>
+          {generatedCode && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <p className="text-xs text-gray-500 mb-2">공유 링크:</p>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={generatedCode}
+                  className="flex-1 text-xs bg-white border rounded px-3 py-2 truncate"
+                />
+                <Button
+                  onClick={copyCode}
+                  size="sm"
+                  className="bg-pink-500 hover:bg-pink-600 text-white"
+                >
+                  {copied ? "✓ 복사됨" : "복사"}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                ⚠️ 이미지는 공유 링크에 포함되지 않습니다 (텍스트만 공유)
+              </p>
+            </div>
+          )}
+        </div>
+
+        {searchTargetId !== null && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm p-4 flex items-center justify-center" onClick={() => !uploadingImage && setSearchTargetId(null)}>
+            <div className="bg-white rounded-3xl border w-full max-w-4xl max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="p-5 md:p-6 border-b border-white/10 flex items-center gap-3">
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold">네이버 이미지 선택</h2>
+                  <p className="text-sm text-gray-500 mt-1">“{searchQuery}” 검색 결과에서 사진을 선택하면 자동으로 등록됩니다.</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSearchTargetId(null)} disabled={uploadingImage}><X className="w-5 h-5" /></Button>
+              </div>
+
+              <div className="p-5 border-b border-white/10 flex gap-2">
+                <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && searchTargetId !== null && searchImages(searchTargetId, searchQuery)} placeholder="이미지 검색어" />
+                <Button onClick={() => searchTargetId !== null && searchImages(searchTargetId, searchQuery)} disabled={searching}>
+                  {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  <span className="ml-2 hidden sm:inline">검색</span>
+                </Button>
+              </div>
+
+              <div className="p-5 overflow-y-auto max-h-[62vh]">
+                {(searching || uploadingImage) && <div className="py-16 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto" /><p className="mt-3 text-gray-400">{uploadingImage ? "선택한 사진을 등록하고 있습니다..." : "이미지를 검색하고 있습니다..."}</p></div>}
+                {!searching && !uploadingImage && searchError && (
+                  <div className="py-12 text-center">
+                    <p className="text-gray-300">{searchError}</p>
+                    {fallbackUrl && <Button className="mt-5" onClick={() => window.open(fallbackUrl, "_blank", "noopener,noreferrer")}><ExternalLink className="w-4 h-4 mr-2" />네이버 이미지 검색 열기</Button>}
+                    <p className="text-xs text-gray-500 mt-4">자동 선택 기능을 사용하려면 서버에 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET을 설정해야 합니다.</p>
+                  </div>
+                )}
+                {!searching && !uploadingImage && imageResults.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {imageResults.map((result, index) => (
+                      <button key={`${result.thumbnail}-${index}`} onClick={() => selectSearchedImage(result.link || result.thumbnail)} className="aspect-square rounded-2xl overflow-hidden border border-white/10 hover:border-blue-400 transition-all bg-gray-50 group relative" title={result.title}>
+                        <img src={result.thumbnail} alt={result.title || `${searchQuery} 검색 이미지`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+                        <span className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs p-2 opacity-0 group-hover:opacity-100 transition-opacity">선택</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <Footer />
       </div>

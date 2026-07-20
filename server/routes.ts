@@ -136,6 +136,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupObjectStorage(app);
   // 이미지 프록시 등록
   await setupImageProxy(app);
+
+  // Naver 이미지 검색 API: 비밀 키는 서버에만 보관하고 검색 결과만 클라이언트에 전달합니다.
+  app.get("/api/image-search", async (req, res) => {
+    const query = String(req.query.q || "").trim().slice(0, 100);
+    if (!query) return res.status(400).json({ message: "검색어를 입력해주세요." });
+
+    const clientId = process.env.NAVER_CLIENT_ID;
+    const clientSecret = process.env.NAVER_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      return res.status(503).json({
+        message: "네이버 이미지 검색 API가 설정되지 않았습니다.",
+        fallbackUrl: `https://search.naver.com/search.naver?where=image&query=${encodeURIComponent(query)}`,
+      });
+    }
+
+    try {
+      const url = new URL("https://openapi.naver.com/v1/search/image.json");
+      url.searchParams.set("query", query);
+      url.searchParams.set("display", "20");
+      url.searchParams.set("sort", "sim");
+      url.searchParams.set("filter", "large");
+      const response = await fetch(url, {
+        headers: {
+          "X-Naver-Client-Id": clientId,
+          "X-Naver-Client-Secret": clientSecret,
+        },
+      });
+      const body = await response.json();
+      if (!response.ok) return res.status(response.status).json({ message: body.errorMessage || "이미지 검색에 실패했습니다." });
+      const items = (body.items || []).map((item: any) => ({
+        title: String(item.title || "").replace(/<[^>]*>/g, ""),
+        link: item.link,
+        thumbnail: item.thumbnail,
+        width: item.sizewidth,
+        height: item.sizeheight,
+      }));
+      res.json({ items });
+    } catch (error) {
+      console.error("Naver image search failed:", error);
+      res.status(500).json({ message: "이미지 검색 중 오류가 발생했습니다." });
+    }
+  });
   // Celebrity routes
   app.get("/api/celebrities", async (req, res) => {
     try {

@@ -1,129 +1,76 @@
-# K-연예인 퀴즈 & 배드민턴 팀 매칭
+# Variety Quiz
 
-한국 연예인 퀴즈 게임과 배드민턴 팀 자동 매칭 서비스를 제공하는 웹 애플리케이션입니다.
+Variety Quiz는 여러 사람이 함께 즐길 수 있는 웹 기반 게임 모음입니다. 현재 연예인·상식 퀴즈, 취향 월드컵, 배드민턴 복식 대진표를 제공합니다.
 
-## 주요 기능
+## 제공 기능
 
-### 🎮 연예인 퀴즈
-- 연예인 사진을 보고 이름 맞히기
-- 5초 타이머 제한
-- 본명/예명 모두 인정, 오타 허용 (75% 유사도)
-- 카테고리별 분류 (가수, 배우, 방송인)
-- 상세한 피드백 및 학습 가이드
+### 배드민턴 세션 운영
 
-### 🏸 배드민턴 팀 매칭
-- 참가자 등록 (개별/리스트 입력)
-- 성별, 실력 레벨 설정 (A~E, 입문)
-- 지능형 팀 구성 알고리즘
-  - 실력 균형 매칭
-  - 혼복/남복/여복 선택
-  - 매칭 히스토리 고려
-  - 공정한 순환 시스템
-- 게임 기록 관리
-- 카카오톡 공유 기능
+- 설정 화면에서 참가자·등급·코트·휴식 간격 정책 구성
+- 기존 세션 계속하기와 확정 라운드 자동 저장
+- 운영 화면에서 경기·휴식·단식을 직접 선택
+- 부족한 휴식 인원 자동 추천 및 경기 참가자 고정
+- 복식 4명과 단식 2명을 한 라운드에 혼합 구성
+- 팀 구분 없이 게임 그룹을 드래그 또는 터치로 편집
+- 휴식·단식·복식의 중복 및 누락을 포함한 전체 참가자 전수검증
+- 세션 고정 또는 라운드별 동적 최소 휴식 간격
+- 휴식 편차 예외 승인 기록과 이후 라운드 재검증 지원
+- 게임 다시 배치, 카드 이동 실행 취소·재실행, 확정 라운드 취소·복원
+- 선택 가능한 자동 배치 후보 3개와 실시간 코트 타이머
+- 세션 종료 요약과 향후 로그인·점수 기록 확장을 위한 버전 데이터 구조
 
-## 기술 스택
+### 취향 월드컵
 
-**Frontend**
-- React 18 + TypeScript
-- Vite
-- TanStack Query
-- Tailwind CSS + shadcn/ui
-- Wouter (라우팅)
+- 항목과 이미지 추가
+- 8강, 16강, 32강, 64강 진행
+- 공유 링크 생성
+- 최종 우승자와 순위 표시
 
-**Backend**
-- Node.js + Express
-- PostgreSQL (Neon Database)
-- Drizzle ORM
-- Google Cloud Storage
+### 퀴즈
 
-## 빠른 시작
+- 연예인, 수도, 랜드마크, 사자성어, 속담 카테고리
+- 제한 시간과 점수 계산
+- 연예인 본명·예명 및 유사 답안 인정
+- 결과 분석과 학습 안내
 
-### 1. 설치
+## 로컬 실행
+
+### Windows PowerShell
+
+```powershell
+cd C:\dev\varietyquiz
+npm.cmd install
+$env:NODE_ENV="development"
+.\node_modules\.bin\tsx.cmd server\index.ts
+```
+
+브라우저에서 `http://localhost:5000`으로 접속합니다.
+
+### macOS 또는 Linux
 
 ```bash
 npm install
-```
-
-### 2. 환경 변수 설정
-
-`.env.example`을 복사하여 `.env` 파일을 생성하고 필요한 값을 입력하세요:
-
-```bash
-cp .env.example .env
-```
-
-필수 환경 변수:
-- `DATABASE_URL`: PostgreSQL 연결 URL
-
-### 3. 데이터베이스 마이그레이션
-
-```bash
-npm run db:push
-```
-
-### 4. 개발 서버 실행
-
-```bash
 npm run dev
 ```
 
-브라우저에서 `http://localhost:5000` 접속
+## 주요 주소
 
-## 배포
+| 서비스 | 주소 |
+| --- | --- |
+| 홈 | `/` |
+| 퀴즈 선택 | `/sitemap` |
+| 배드민턴 복식 대진표 | `/bracket/badminton` |
+| 배드민턴 게임 배치 | `/bracket/badminton/board` |
+| 취향 월드컵 둘러보기 | `/bracket/worldcup` |
+| 취향 월드컵 만들기 | `/bracket/worldcup/create` |
+| 취향 월드컵 플레이 | `/bracket/worldcup/play` |
 
-자세한 배포 가이드는 [DEPLOYMENT.md](./DEPLOYMENT.md)를 참고하세요.
+## 기술 구성
 
-### 추천 배포 플랫폼
-- **Vercel**: 프론트엔드 + 서버리스
-- **Railway**: 풀스택 + 데이터베이스
-- **Render**: 무료 티어 제공
+- React 18, TypeScript, Vite
+- Express
+- Tailwind CSS, shadcn/ui
+- Wouter
+- Vitest
 
-## 스크립트
-
-```bash
-# 개발 모드
-npm run dev
-
-# 타입 체크
-npm run check
-
-# 프로덕션 빌드
-npm run build
-
-# 프로덕션 실행
-npm start
-
-# 데이터베이스 마이그레이션
-npm run db:push
-```
-
-## 프로젝트 구조
-
-```
-varietyquiz/
-├── client/           # React 프론트엔드
-│   ├── src/
-│   │   ├── components/  # UI 컴포넌트
-│   │   ├── pages/       # 페이지 컴포넌트
-│   │   ├── hooks/       # 커스텀 훅
-│   │   ├── data/        # 정적 데이터
-│   │   └── utils/       # 유틸리티 함수
-│   └── index.html
-├── server/           # Express 백엔드
-│   ├── index.ts      # 서버 진입점
-│   ├── routes.ts     # API 라우트
-│   └── storage.ts    # 데이터베이스 로직
-├── shared/           # 공유 타입 및 스키마
-│   ├── schema.ts
-│   └── quiz-schema.ts
-└── package.json
-```
-
-## 라이선스
-
-MIT
-
-## 기여
-
-이슈와 PR은 언제나 환영합니다!
+배포 및 운영 방법은 [DEPLOYMENT.md](./DEPLOYMENT.md)를 참고하세요.

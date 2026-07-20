@@ -84,7 +84,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { id, username: insertUser.username, password: insertUser.password };
     this.users.set(id, user);
     return user;
   }
@@ -112,7 +112,13 @@ export class MemStorage implements IStorage {
 
   async createCelebrity(insertCelebrity: InsertCelebrity): Promise<Celebrity> {
     const id = randomUUID();
-    const celebrity: Celebrity = { ...insertCelebrity, id };
+    const celebrity: Celebrity = {
+      id,
+      name: insertCelebrity.name,
+      realName: insertCelebrity.realName ?? null,
+      imageUrl: insertCelebrity.imageUrl,
+      category: insertCelebrity.category,
+    };
     this.celebrities.set(id, celebrity);
     return celebrity;
   }
@@ -147,7 +153,12 @@ export class MemStorage implements IStorage {
     const session: QuizSession = {
       ...insertSession,
       id,
-      createdAt: new Date(),
+      totalQuestions: insertSession.totalQuestions ?? 20,
+      currentQuestion: insertSession.currentQuestion ?? 0,
+      score: insertSession.score ?? 0,
+      correctAnswers: insertSession.correctAnswers ?? 0,
+      wrongAnswers: insertSession.wrongAnswers ?? 0,
+      isCompleted: insertSession.isCompleted ?? 0,
     };
     this.quizSessions.set(id, session);
     return session;

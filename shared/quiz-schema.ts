@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const quizQuestions = pgTable("quiz_questions", {
@@ -23,12 +22,22 @@ export const gameSession = pgTable("game_session", {
   isCompleted: integer("is_completed").notNull().default(0),
 });
 
-export const insertQuizQuestionSchema = createInsertSchema(quizQuestions).omit({
-  id: true,
+export const insertQuizQuestionSchema = z.object({
+  category: z.string().min(1),
+  question: z.string().min(1),
+  answer: z.string().min(1),
+  imageUrl: z.string().nullable().optional(),
+  difficulty: z.number().int().optional(),
 });
 
-export const insertGameSessionSchema = createInsertSchema(gameSession).omit({
-  id: true,
+export const insertGameSessionSchema = z.object({
+  category: z.string().min(1),
+  totalQuestions: z.number().int(),
+  currentQuestion: z.number().int().optional(),
+  score: z.number().int().optional(),
+  correctAnswers: z.number().int().optional(),
+  wrongAnswers: z.number().int().optional(),
+  isCompleted: z.number().int().optional(),
 });
 
 export type InsertQuizQuestion = z.infer<typeof insertQuizQuestionSchema>;
