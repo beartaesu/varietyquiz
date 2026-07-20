@@ -48,6 +48,12 @@ export default function MainHomePage() {
     }
   ];
 
+  const prioritizedServices = [...services].sort((a, b) => {
+    if (a.id === "badminton") return -1;
+    if (b.id === "badminton") return 1;
+    return 0;
+  });
+
   const handleServiceClick = (service: typeof services[0]) => {
     if (service.available && service.link) {
       setLocation(service.link);
@@ -80,7 +86,7 @@ export default function MainHomePage() {
 
         {/* Service Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {services.map((service) => (
+          {prioritizedServices.map((service) => (
             <div
               key={service.id}
               onClick={() => handleServiceClick(service)}
