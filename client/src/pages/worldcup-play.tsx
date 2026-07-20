@@ -204,6 +204,14 @@ export default function WorldCupPlayPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-600 to-purple-700 p-4 py-8">
       <div className="max-w-5xl mx-auto">
+        <Button
+          variant="outline"
+          onClick={() => setLocation("/bracket/worldcup")}
+          className="mb-4 bg-white/15 text-white border-white/30 hover:bg-white/25 hover:text-white"
+        >
+          <Home className="w-4 h-4 mr-2" /> 월드컵 목록
+        </Button>
+
         {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-white mb-1">{worldCupData.title}</h1>

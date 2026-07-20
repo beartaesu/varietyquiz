@@ -61,8 +61,8 @@ export default function WorldCupGalleryPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br p-4 py-8">
       <div className="max-w-5xl mx-auto">
-        <Button variant="outline" onClick={() => setLocation("/bracket")} className="bg-white/20 text-white border-white/30">
-          <Home className="w-4 h-4 mr-2" /> 뒤로가기
+        <Button variant="outline" onClick={() => setLocation("/")} className="bg-white/20 text-white border-white/30">
+          <Home className="w-4 h-4 mr-2" /> 홈으로
         </Button>
 
         <header className="py-14 md:py-20 text-center">

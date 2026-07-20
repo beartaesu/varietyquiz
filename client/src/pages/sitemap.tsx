@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSEO } from "@/hooks/use-seo";
 import { AdSenseDisplay } from "@/components/AdSense";
 import { Footer } from "@/components/Footer";
+import { Home } from "lucide-react";
 // Images temporarily disabled for deployment
 // import boardGameCollection from "@assets/generated_images/Colorful_board_game_collection_b62010fc.png";
 // import boardGamePieces from "@assets/generated_images/Board_game_pieces_variety_5429783a.png";
@@ -112,6 +113,14 @@ export default function SitemapPage() {
       </div>
       
       <div className="max-w-6xl w-full mx-auto relative z-10">
+        <Button
+          variant="outline"
+          onClick={() => setLocation("/")}
+          className="bg-white/20 text-white border-white/30 hover:bg-white/30 hover:text-white"
+        >
+          <Home className="w-4 h-4 mr-2" /> 홈으로
+        </Button>
+
         <div className="text-center mb-8 mt-8">
           <h1 className="text-6xl font-bold text-white mb-4">
             🗺️ 사이트맵

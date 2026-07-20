@@ -104,7 +104,7 @@ export default function BadmintonMatcherPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br p-4 py-8">
       <div className="max-w-5xl mx-auto space-y-7">
-        <Button variant="outline" onClick={() => setLocation("/bracket")}><Home className="w-4 h-4 mr-2" />뒤로가기</Button>
+        <Button variant="outline" onClick={() => setLocation("/")}><Home className="w-4 h-4 mr-2" />홈으로</Button>
         <header><p className="text-blue-400 font-semibold">SESSION SETUP</p><h1 className="text-4xl md:text-5xl font-bold mt-2">배드민턴 세션 설정</h1><p className="text-gray-400 mt-3">참가자와 운영 기준만 정하고, 휴식·단식 선택은 다음 화면에서 진행합니다.</p></header>
 
         {sessions.length > 0 && <section className="bg-white rounded-3xl border p-5 md:p-6">
