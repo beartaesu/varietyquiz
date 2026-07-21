@@ -18,9 +18,9 @@ export default function WorldCupGalleryPage() {
   const [mine, setMine] = useState<WorldCupLibraryEntry[]>([]);
 
   useSEO({
-    title: "취향 월드컵 - 인기 월드컵 플레이",
-    description: "다른 사람들이 만든 인기 취향 월드컵을 골라 바로 플레이하세요",
-    keywords: "취향월드컵, 이상형월드컵, 인기월드컵",
+    title: "취향 월드컵 - 기본 월드컵 플레이",
+    description: "서비스에서 기본으로 준비한 취향 월드컵을 골라 플레이하거나 직접 만들어보세요",
+    keywords: "취향월드컵, 이상형월드컵, 월드컵만들기",
   });
 
   useEffect(() => setMine(getMyWorldCups()), []);
@@ -45,7 +45,9 @@ export default function WorldCupGalleryPage() {
             <span className="text-xs text-gray-500 border rounded-full px-3 py-1">{entry.round}강</span>
           </div>
           <h3 className="text-2xl font-bold mt-5">{entry.title}</h3>
-          <p className="text-gray-500 mt-2">{entry.creator} 제작 · {entry.plays.toLocaleString()}회 플레이</p>
+          <p className="text-gray-500 mt-2">
+            {entry.featured ? "서비스 기본 제공 · 샘플 콘텐츠" : "내가 만든 월드컵 · 이 기기에 저장됨"}
+          </p>
           <div className="flex flex-wrap gap-2 mt-5">
             {entry.items.slice(0, 4).map(item => <span key={item.id} className="text-xs bg-gray-50 rounded-full px-3 py-1.5">{item.name}</span>)}
             {entry.items.length > 4 && <span className="text-xs text-gray-500 px-1 py-1.5">+{entry.items.length - 4}</span>}
@@ -67,14 +69,14 @@ export default function WorldCupGalleryPage() {
 
         <header className="py-14 md:py-20 text-center">
           <div className="inline-flex items-center gap-2 text-sm border border-white/15 bg-white/10 rounded-full px-4 py-2 text-gray-300">
-            <Sparkles className="w-4 h-4" /> 지금 인기 있는 선택
+            <Sparkles className="w-4 h-4" /> 기본으로 준비된 선택
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mt-6 tracking-tight">오늘은 무엇을<br />골라볼까요?</h1>
-          <p className="text-lg md:text-xl text-gray-400 mt-5">다른 사람들이 만든 월드컵을 골라 바로 시작하세요.</p>
+          <p className="text-lg md:text-xl text-gray-400 mt-5">서비스에서 기본으로 준비한 월드컵을 골라 시작하거나 직접 만들어보세요.</p>
         </header>
 
         <section>
-          <div className="flex items-center gap-3 mb-6"><Trophy className="w-6 h-6" /><h2 className="text-2xl font-bold">인기 월드컵</h2></div>
+          <div className="flex items-center gap-3 mb-6"><Trophy className="w-6 h-6" /><h2 className="text-2xl font-bold">기본 제공 월드컵</h2></div>
           {renderCards(featuredWorldCups)}
         </section>
 
