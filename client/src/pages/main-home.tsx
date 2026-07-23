@@ -1,141 +1,160 @@
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
 import { useSEO, getHomeSEO } from "@/hooks/use-seo";
-import { ArrowRight } from "lucide-react";
-import { Footer } from "@/components/Footer";
-// Images temporarily disabled for deployment
-// import boardGameCollection from "@assets/generated_images/Colorful_board_game_collection_b62010fc.png";
-// import boardGamePieces from "@assets/generated_images/Board_game_pieces_variety_5429783a.png";
-// import quizShowGame from "@assets/generated_images/Quiz_show_board_game_227373d9.png";
+import {
+  ArrowRight,
+  CircleHelp,
+  Dice5,
+  Play,
+  Sparkles,
+  Trophy,
+  UsersRound,
+} from "lucide-react";
+
+const services = [
+  {
+    id: "matching",
+    eyebrow: "FAIR PLAY",
+    title: "게임 매칭",
+    description: "인원과 코트에 맞춰 공정한 팀을 빠르게 구성해요.",
+    link: "/matching",
+    icon: UsersRound,
+    tone: "blue",
+    preview: (
+      <div className="home-match-preview" aria-hidden="true">
+        <div><span>전체 인원</span><strong>12명</strong></div>
+        <div><span>코트 수</span><strong>3개</strong></div>
+        <div><span>참여 인원</span><strong>4명</strong></div>
+      </div>
+    ),
+  },
+  {
+    id: "worldcup",
+    eyebrow: "PICK YOUR FAVORITE",
+    title: "취향 월드컵",
+    description: "두 선택지 중 하나를 고르며 나만의 최애를 찾아보세요.",
+    link: "/bracket/worldcup",
+    icon: Trophy,
+    tone: "violet",
+    preview: (
+      <div className="home-bracket-preview" aria-hidden="true">
+        <i /><i /><i /><i /><span /><span /><b />
+      </div>
+    ),
+  },
+  {
+    id: "quiz",
+    eyebrow: "QUICK CHALLENGE",
+    title: "예능 퀴즈",
+    description: "가볍게 시작해서 제대로 몰입하는 다양한 퀴즈를 만나보세요.",
+    link: "/sitemap",
+    icon: CircleHelp,
+    tone: "coral",
+    preview: (
+      <div className="home-quiz-preview" aria-hidden="true">
+        <div><strong>Q.</strong><span /></div>
+        <div className="home-answer-grid"><i>A</i><i>B</i><i>C</i><i>D</i></div>
+      </div>
+    ),
+  },
+] as const;
 
 export default function MainHomePage() {
   const [, setLocation] = useLocation();
 
-  // SEO 메타데이터 설정
   useSEO(getHomeSEO());
 
-  const services = [
-    {
-      id: "worldcup",
-      title: "취향 월드컵",
-      emoji: "🏆",
-      description: "나만의 이상형 월드컵을 만들고 플레이하세요",
-      available: true,
-      link: "/bracket/worldcup"
-    },
-    {
-      id: "quiz",
-      title: "예능 퀴즈",
-      emoji: "🎮",
-      description: "다양한 퀴즈로 재미있게 즐기세요",
-      available: true,
-      link: "/sitemap"
-    },
-    {
-      id: "badminton",
-      title: "배드민턴 매칭",
-      emoji: "🏸",
-      description: "배드민턴 팀을 공정하게 매칭하세요",
-      available: true,
-      link: "/bracket/badminton"
-    },
-    {
-      id: "coming1",
-      title: "Coming Soon",
-      emoji: "🎯",
-      description: "곧 새로운 서비스가 출시됩니다",
-      available: false
-    }
-  ];
-
-  const prioritizedServices = [...services].sort((a, b) => {
-    if (a.id === "badminton") return -1;
-    if (b.id === "badminton") return 1;
-    return 0;
-  });
-
-  const handleServiceClick = (service: typeof services[0]) => {
-    if (service.available && service.link) {
-      setLocation(service.link);
-    }
-  };
+  const navigateTo = (path: string) => setLocation(path);
+  const scrollToGames = () => document.getElementById("games")?.scrollIntoView({ behavior: "smooth" });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary to-secondary p-4 py-12 relative overflow-hidden">
-      {/* 배경 장식 요소들 - 임시로 CSS로 대체 */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-10 left-10 w-48 h-32 bg-gradient-to-r from-blue-400 to-purple-500 rounded-lg transform rotate-12"></div>
-        <div className="absolute top-20 right-10 w-40 h-30 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg transform -rotate-6"></div>
-        <div className="absolute bottom-20 left-20 w-36 h-36 bg-gradient-to-r from-pink-400 to-red-500 rounded-full transform rotate-45"></div>
-        <div className="absolute bottom-10 right-20 w-44 h-28 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg transform -rotate-12"></div>
-      </div>
-      
-      <div className="max-w-6xl w-full mx-auto relative z-10">
-        {/* Hero Section */}
-        <div className="text-center mb-16 mt-8">
-          <h1 className="text-7xl font-bold text-white mb-6">
-            🎲 Welcome!
-          </h1>
-          <p className="text-2xl text-white/90 mb-4">
-            재미있는 게임과 퀴즈로 즐거운 시간을 보내세요
-          </p>
-          <p className="text-lg text-white/70">
-            친구들과 함께 경쟁하고, 실력을 뽐내보세요!
-          </p>
-        </div>
+    <main className="home-shell">
+      <div className="home-aurora home-aurora-blue" />
+      <div className="home-aurora home-aurora-coral" />
+      <div className="home-noise" />
 
-        {/* Service Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {prioritizedServices.map((service) => (
-            <div
-              key={service.id}
-              onClick={() => handleServiceClick(service)}
-              className={`bg-white rounded-3xl p-10 shadow-xl transition-all duration-300 min-h-[320px] flex flex-col ${
-                service.available
-                  ? 'hover:scale-105 hover:shadow-2xl cursor-pointer'
-                  : 'opacity-60 cursor-not-allowed'
-              }`}
-              data-testid={`service-${service.id}`}
-            >
-              <div className="flex-1">
-                <div className="text-8xl mb-6 text-center">{service.emoji}</div>
-                <h3 className="text-3xl font-bold text-gray-800 mb-4 text-center">
-                  {service.title}
-                </h3>
-                <p className="text-lg text-gray-600 text-center leading-relaxed mb-6">
-                  {service.description}
-                </p>
-              </div>
-              
-              {service.available ? (
-                <div className="flex items-center justify-center text-primary font-semibold group">
-                  <span className="mr-2">시작하기</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </div>
-              ) : (
-                <div className="flex items-center justify-center text-gray-400 font-medium">
-                  <span>준비중...</span>
-                </div>
-              )}
+      <div className="home-container">
+        <header className="home-nav hub-simple-nav">
+          <button className="home-brand" onClick={() => setLocation("/")} aria-label="홈으로 이동">
+            <span className="home-brand-mark"><Dice5 /></span>
+            <span>버라이어티 퀴즈</span>
+          </button>
+
+          <span className="home-nav-label">PLAY YOUR WAY</span>
+        </header>
+
+        <section className="home-hero">
+          <div className="home-hero-copy">
+            <div className="home-kicker"><Sparkles /> PLAY YOUR WAY</div>
+            <h1>오늘은<br /><span>뭐하고 놀까?</span></h1>
+            <p>취향 대결부터 게임 매칭까지.<br className="home-mobile-break" /> 고민 없이, 가볍게 시작해요.</p>
+            <div className="home-hero-actions">
+              <button className="home-primary-action" onClick={scrollToGames}>
+                게임 둘러보기 <ArrowRight />
+              </button>
+              <button className="home-secondary-action" onClick={() => navigateTo("/bracket/worldcup")}>
+                <Play /> 바로 플레이
+              </button>
             </div>
-          ))}
-        </div>
-
-        {/* Info Section */}
-        <div className="text-center mt-16">
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 max-w-3xl mx-auto">
-            <p className="text-white/90 text-lg mb-4">
-              💡 더 많은 서비스가 곧 추가될 예정입니다
-            </p>
-            <p className="text-white/70 text-sm">
-              지금 바로 예능 퀴즈를 시작해보세요!
-            </p>
           </div>
-        </div>
 
-        {/* Footer */}
-        <Footer />
+          <div className="home-visual" aria-hidden="true">
+            <div className="home-visual-glow" />
+            <div className="home-trophy"><Trophy /></div>
+            <div className="home-question">?</div>
+            <div className="home-die"><span>●</span><span>●</span><span>●</span></div>
+            <div className="home-token home-token-one" />
+            <div className="home-token home-token-two" />
+            <div className="home-pawn home-pawn-one" />
+            <div className="home-pawn home-pawn-two" />
+            <div className="home-platform" />
+          </div>
+        </section>
+
+        <section className="home-games" id="games">
+          <div className="home-section-heading">
+            <div>
+              <span>CHOOSE A GAME</span>
+              <h2>지금 바로 시작</h2>
+            </div>
+            <p>설치 없이 바로 즐길 수 있어요</p>
+          </div>
+
+          <div className="home-service-grid">
+            {services.map((service) => {
+              const Icon = service.icon;
+              return (
+                <article key={service.id} className={`home-service-card home-service-${service.tone}`}>
+                  <button
+                    className="home-card-hitbox"
+                    onClick={() => navigateTo(service.link)}
+                    aria-label={`${service.title} 시작하기`}
+                  />
+                  <div className="home-card-top">
+                    <span className="home-service-icon"><Icon /></span>
+                    <span className="home-card-arrow"><ArrowRight /></span>
+                  </div>
+                  <span className="home-eyebrow">{service.eyebrow}</span>
+                  <h3>{service.title}</h3>
+                  <p>{service.description}</p>
+                  {service.preview}
+                  <div className="home-card-footer">
+                    <span>시작하기</span><ArrowRight />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <footer className="home-footer">
+          <div className="home-brand home-brand-footer">
+            <span className="home-brand-mark"><Dice5 /></span>
+            <span>버라이어티 퀴즈</span>
+          </div>
+          <p>같이 놀면 더 재미있으니까.</p>
+          <a href="mailto:varietyquizquiz@gmail.com">문의하기</a>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 }

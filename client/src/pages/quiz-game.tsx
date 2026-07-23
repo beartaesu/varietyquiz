@@ -56,31 +56,27 @@ export default function QuizGamePage() {
       let selectedQuestions: QuizQuestion[] = [];
       
       if (cat === 'person') {
-        // 인물퀴즈 = 로컬 파일 기반 연예인 데이터 사용
-        
-        // 사용자 제공 연예인 데이터를 로컬에서 직접 로드
-        const allCelebrities = (window as any).CELEBRITY_QUIZ_DATA || [];
-        
-        if (allCelebrities.length === 0) {
+        // 인물퀴즈 = 서버의 연예인 데이터 사용
+        const response = await fetch(`/api/celebrities/random/${questionCount}`);
+        if (!response.ok) throw new Error(`연예인 API 오류: ${response.status}`);
+        const selectedCelebrities = await response.json();
+
+        if (!Array.isArray(selectedCelebrities) || selectedCelebrities.length === 0) {
           throw new Error('연예인 데이터를 찾을 수 없습니다');
         }
-        
-        // 랜덤하게 선택
-        const shuffled = [...allCelebrities].sort(() => Math.random() - 0.5);
-        const selectedCelebrities = shuffled.slice(0, questionCount);
-        
-        selectedQuestions = selectedCelebrities.map((celeb: any) => ({
-          id: celeb.id,
+
+        selectedQuestions = selectedCelebrities.map((celeb: any, index: number) => ({
+          id: String(celeb.id || `${celeb.name}-${index}`),
           category: 'person',
           question: '이 연예인은 누구일까요?',
           answer: celeb.name,
           realName: celeb.realName || null,
-          imageUrl: celeb.image,
+          imageUrl: celeb.imageUrl || celeb.image,
           difficulty: 1,
           celebCategory: celeb.category || 'entertainer'
         }));
-        
-        console.log(`✅ 로컬 연예인 데이터 로드 성공: ${selectedQuestions.length}명`);
+
+        console.log(`✅ 연예인 API 데이터 로드 성공: ${selectedQuestions.length}명`);
         console.log(`🎯 선택된 연예인들:`, selectedQuestions.map(q => q.answer).join(', '));
       } else {
         // 다른 카테고리는 목 데이터 사용

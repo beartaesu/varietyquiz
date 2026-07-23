@@ -5,6 +5,7 @@ import {
   ScheduleRound,
   ScheduleRuleError,
   calculateFlexibleLineup,
+  calculateRepeatRule,
   calculateRestRule,
   generateManualRound,
   validateSchedule,
@@ -52,6 +53,126 @@ describe("유연한 인원 구성", () => {
           && result.totalGames <= courts;
       },
     ), { numRuns: 1000 });
+  });
+
+  it("2~3명은 별도 선택 없이 단식 1경기와 휴식자로 자동 구성한다", () => {
+    for (const count of [2, 3]) {
+      const roster = players(count);
+      const result = calculateFlexibleLineup(roster, 1, new Set(), new Set(), roster.map(player => player.id));
+      expect(result.valid, `${count}명 구성`).toBe(true);
+      expect(result.singlesGames).toBe(1);
+      expect(result.soloIds.size).toBe(2);
+      expect(result.effectiveRestIds.size).toBe(count - 2);
+    }
+  });
+});
+
+describe("인원수 기반 재매칭 허용", () => {
+  it("9명 복식은 세 번째 출전부터 최소 한 상대의 재매칭이 불가피하다고 계산한다", () => {
+    const beforeThirdGame = calculateRepeatRule(9, 3, 4);
+    expect(beforeThirdGame.strict).toBe(true);
+    expect(beforeThirdGame.unavoidableRepeatSlots).toBe(0);
+
+    const thirdGame = calculateRepeatRule(9, 6, 4);
+    expect(thirdGame.opponentCapacity).toBe(8);
+    expect(thirdGame.totalEncounterSlots).toBe(9);
+    expect(thirdGame.unavoidableRepeatSlots).toBe(1);
+    expect(thirdGame.strict).toBe(false);
+  });
+
+  it("9명 2코트는 휴식을 순환하며 6라운드까지 재매칭 규칙에 막히지 않는다", () => {
+    const roster = players(9);
+    const rounds: ScheduleRound[] = [];
+    for (let index = 0; index < 6; index++) {
+      const round = generateManualRound(roster, [roster[index]], rounds, 2, [], fixedOptions).round;
+      rounds.push(round);
+    }
+    const validation = validateSchedule(roster, rounds);
+    expect(validation.issues.filter(issue => issue.code === "immediate_rematch" || issue.code === "three_consecutive_group")).toEqual([]);
+  });
+
+  it("반복이 불가피한 인원·코트 조합도 20라운드까지 중단하지 않는다", () => {
+    const scenarios = [
+      { count: 5, courts: 1 },
+      { count: 6, courts: 1 },
+      { count: 7, courts: 1 },
+      { count: 9, courts: 2 },
+      { count: 10, courts: 2 },
+      { count: 12, courts: 3 },
+      { count: 13, courts: 3 },
+    ];
+    scenarios.forEach(({ count, courts }) => {
+      const roster = players(count);
+      const rounds: ScheduleRound[] = [];
+      let restOrder = roster.map(player => player.id);
+      const restCount = count - Math.min(courts, Math.floor(count / 4)) * 4;
+      const fixedMinimumGap = calculateRestRule(count, restCount, "dynamic").minimumGap;
+      for (let index = 0; index < 20; index++) {
+        const lineup = calculateFlexibleLineup(roster, courts, new Set(), new Set(), restOrder);
+        expect(lineup.valid, `${count}명·${courts}코트 ${index + 1}라운드 구성`).toBe(true);
+        const resting = roster.filter(player => lineup.effectiveRestIds.has(player.id));
+        const round = generateManualRound(roster, resting, rounds, courts, [], {
+          restGapMode: "fixed",
+          fixedMinimumGap,
+        }).round;
+        rounds.push(round);
+        const restingIds = new Set(resting.map(player => player.id));
+        restOrder = [
+          ...restOrder.filter(id => !restingIds.has(id)),
+          ...restOrder.filter(id => restingIds.has(id)),
+        ];
+      }
+      expect(validateSchedule(roster, rounds).issues, `${count}명·${courts}코트 검증`).toEqual([]);
+    });
+  });
+
+  it("같은 입력에는 항상 같은 배치를 만들고 후보 번호로 대안을 만들 수 있다", () => {
+    const roster = players(12);
+    const first = generateManualRound(roster, [], [], 3, [], { ...fixedOptions, candidateIndex: 0 }).round;
+    const repeated = generateManualRound(roster, [], [], 3, [], { ...fixedOptions, candidateIndex: 0 }).round;
+    const alternative = generateManualRound(roster, [], [], 3, [], { ...fixedOptions, candidateIndex: 1 }).round;
+    const ids = (round: ScheduleRound) => round.courts.map(court => court.players.map(player => player.id));
+    expect(ids(repeated)).toEqual(ids(first));
+    expect(ids(alternative)).not.toEqual(ids(first));
+  });
+
+  it("특정 두 사람을 피할 수 있는데도 계속 같은 코트에 배치하면 차단한다", () => {
+    const roster = players(9);
+    const restIds = [9, 8, 7, 6];
+    const rounds: ScheduleRound[] = restIds.map((restId, index) => {
+      const resting = roster.find(player => player.id === restId)!;
+      const active = roster.filter(player => player.id !== restId);
+      const fixedPairCourt = [
+        roster[0],
+        roster[1],
+        ...active.filter(player => player.id !== 1 && player.id !== 2).slice(0, 2),
+      ];
+      const fixedIds = new Set(fixedPairCourt.map(player => player.id));
+      return {
+        round: index + 1,
+        resting: [resting],
+        courts: [
+          { type: "doubles", players: fixedPairCourt },
+          { type: "doubles", players: active.filter(player => !fixedIds.has(player.id)) },
+        ],
+        courtLimit: 2,
+        restRule: calculateRestRule(9, 1, "fixed", 1),
+        approvedExceptions: [],
+        createdAt: new Date(index).toISOString(),
+      };
+    });
+
+    const validation = validateSchedule(roster, rounds);
+    expect(validation.issues.some(issue => issue.code === "immediate_rematch")).toBe(true);
+    expect(validation.issues.some(issue => issue.code === "three_consecutive_group")).toBe(true);
+    expect(() => generateManualRound(
+      roster,
+      rounds[3].resting,
+      rounds.slice(0, 3),
+      2,
+      [],
+      fixedOptions,
+    )).not.toThrow();
   });
 });
 
@@ -133,9 +254,15 @@ describe("휴식 기준과 승인 예외", () => {
     expect(validation.issues.some(issue => issue.round === 2 && issue.code === "rest_imbalance")).toBe(false);
   });
 
-  it("같은 휴식 조합 반복과 최소 휴식 간격 위반을 차단한다", () => {
+  it("휴식 조합은 순환 후 재사용할 수 있지만 최소 휴식 간격 위반은 차단한다", () => {
     const roster = players(8);
     const first = generateManualRound(roster, roster.slice(0, 4), [], 1, [], { restGapMode: "fixed", fixedMinimumGap: 2 }).round;
     expect(() => generateManualRound(roster, roster.slice(0, 4), [first], 1, [], { restGapMode: "fixed", fixedMinimumGap: 2, allowRestImbalance: true })).toThrow(ScheduleRuleError);
+    const repeated = generateManualRound(roster, roster.slice(0, 4), [first], 1, [], {
+      restGapMode: "fixed",
+      fixedMinimumGap: 1,
+      allowRestImbalance: true,
+    }).round;
+    expect(validateSchedule(roster, [first, repeated]).issues.filter(issue => issue.code === "duplicate_rest_group")).toEqual([]);
   });
 });

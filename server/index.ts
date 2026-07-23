@@ -5,21 +5,55 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+app.disable("x-powered-by");
 
-// CORS 헤더 추가 - 브라우저에서 API 요청 허용
+const allowedOrigins = new Set([
+  "https://varietyquizquiz.com",
+  "https://www.varietyquizquiz.com",
+  "http://localhost:5000",
+  "http://127.0.0.1:5000",
+  ...String(process.env.ALLOWED_ORIGINS || "").split(",").map(value => value.trim()).filter(Boolean),
+]);
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (app.get("env") === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  next();
+});
+
+app.use((req, res, next) => {
+  if (app.get("env") !== "production") return next();
+  try {
+    const normalizedPath = decodeURIComponent(req.path).replace(/\\/g, "/");
+    const sensitive = /(^|\/)(?:\.env(?:\.|$)|\.git(?:\/|$)|server(?:\/|$)|shared(?:\/|$)|client\/src(?:\/|$)|src(?:\/|$)|node_modules(?:\/|$)|server-simple\.js$|package(?:-lock)?\.json$|tsconfig\.json$|vite\.config\.[jt]s$)/i;
+    if (normalizedPath.includes("..") || sensitive.test(normalizedPath)) return res.status(404).send("Not found");
     next();
+  } catch {
+    res.status(400).send("Bad request");
   }
 });
 
-app.use(express.json());
+// 필요한 서비스 출처에만 API 접근을 허용합니다.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowed = !origin || allowedOrigins.has(origin);
+  if (origin && allowed) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin");
+  }
+  if (req.method === 'OPTIONS') {
+    if (!allowed) return res.sendStatus(403);
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 app.use((req, res, next) => {

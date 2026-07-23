@@ -1,101 +1,78 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Footer } from "@/components/Footer";
+import { ArrowRight, Coffee, Gamepad2, Plane, Play, Plus, Trophy, Utensils } from "lucide-react";
+import { HubBackdrop, HubNav } from "@/components/HubNav";
 import { useSEO } from "@/hooks/use-seo";
-import { ArrowRight, Home, Play, Plus, Sparkles, Trophy } from "lucide-react";
-import {
-  featuredWorldCups,
-  getMyWorldCups,
-  selectWorldCup,
-  WorldCupLibraryEntry,
-} from "@/lib/worldcup-library";
+import { featuredWorldCups, getMyWorldCups, selectWorldCup, WorldCupLibraryEntry } from "@/lib/worldcup-library";
 
-const cardEmoji = ["🍽️", "✈️", "🍿", "✨", "🏆", "🎯"];
+type Filter = "all" | "food" | "travel" | "lifestyle";
+const filters: Array<{ id: Filter; label: string }> = [
+  { id: "all", label: "전체" }, { id: "food", label: "음식" }, { id: "travel", label: "여행" }, { id: "lifestyle", label: "라이프" },
+];
+
+function categoryFor(entry: WorldCupLibraryEntry): Filter {
+  if (entry.id.includes("food") || entry.id.includes("snack")) return "food";
+  if (entry.id.includes("travel")) return "travel";
+  return "lifestyle";
+}
+
+function WorldCupIcon({ entry }: { entry: WorldCupLibraryEntry }) {
+  const category = categoryFor(entry);
+  if (category === "food") return <Utensils />;
+  if (category === "travel") return <Plane />;
+  if (entry.id.includes("weekend")) return <Coffee />;
+  return <Gamepad2 />;
+}
 
 export default function WorldCupGalleryPage() {
   const [, setLocation] = useLocation();
   const [mine, setMine] = useState<WorldCupLibraryEntry[]>([]);
+  const [filter, setFilter] = useState<Filter>("all");
 
-  useSEO({
-    title: "취향 월드컵 - 기본 월드컵 플레이",
-    description: "서비스에서 기본으로 준비한 취향 월드컵을 골라 플레이하거나 직접 만들어보세요",
-    keywords: "취향월드컵, 이상형월드컵, 월드컵만들기",
-  });
-
+  useSEO({ title: "취향 월드컵 | 버라이어티 퀴즈", description: "준비된 취향 월드컵을 플레이하거나 직접 만들어보세요.", keywords: "취향월드컵, 이상형월드컵, 월드컵만들기" });
   useEffect(() => setMine(getMyWorldCups()), []);
 
-  const play = (entry: WorldCupLibraryEntry) => {
-    selectWorldCup(entry);
-    setLocation("/bracket/worldcup/play");
-  };
-
-  const renderCards = (entries: WorldCupLibraryEntry[], startIndex = 0) => (
-    <div className="grid sm:grid-cols-2 gap-5">
-      {entries.map((entry, index) => (
-        <article
-          key={entry.id}
-          onClick={() => play(entry)}
-          className="bg-white rounded-3xl p-6 border cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:border-white/30 group"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
-              {cardEmoji[(startIndex + index) % cardEmoji.length]}
-            </div>
-            <span className="text-xs text-gray-500 border rounded-full px-3 py-1">{entry.round}강</span>
-          </div>
-          <h3 className="text-2xl font-bold mt-5">{entry.title}</h3>
-          <p className="text-gray-500 mt-2">
-            {entry.featured ? "서비스 기본 제공 · 샘플 콘텐츠" : "내가 만든 월드컵 · 이 기기에 저장됨"}
-          </p>
-          <div className="flex flex-wrap gap-2 mt-5">
-            {entry.items.slice(0, 4).map(item => <span key={item.id} className="text-xs bg-gray-50 rounded-full px-3 py-1.5">{item.name}</span>)}
-            {entry.items.length > 4 && <span className="text-xs text-gray-500 px-1 py-1.5">+{entry.items.length - 4}</span>}
-          </div>
-          <div className="flex items-center mt-6 text-sm font-semibold text-blue-500 group-hover:gap-2 transition-all">
-            <Play className="w-4 h-4 mr-2" /> 바로 시작 <ArrowRight className="w-4 h-4 ml-1" />
-          </div>
-        </article>
-      ))}
-    </div>
-  );
+  const play = (entry: WorldCupLibraryEntry) => { selectWorldCup(entry); setLocation("/bracket/worldcup/play"); };
+  const visible = filter === "all" ? featuredWorldCups : featuredWorldCups.filter(entry => categoryFor(entry) === filter);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br p-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <Button variant="outline" onClick={() => setLocation("/")} className="bg-white/20 text-white border-white/30">
-          <Home className="w-4 h-4 mr-2" /> 홈으로
-        </Button>
-
-        <header className="py-14 md:py-20 text-center">
-          <div className="inline-flex items-center gap-2 text-sm border border-white/15 bg-white/10 rounded-full px-4 py-2 text-gray-300">
-            <Sparkles className="w-4 h-4" /> 기본으로 준비된 선택
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold mt-6 tracking-tight">오늘은 무엇을<br />골라볼까요?</h1>
-          <p className="text-lg md:text-xl text-gray-400 mt-5">서비스에서 기본으로 준비한 월드컵을 골라 시작하거나 직접 만들어보세요.</p>
-        </header>
-
-        <section>
-          <div className="flex items-center gap-3 mb-6"><Trophy className="w-6 h-6" /><h2 className="text-2xl font-bold">기본 제공 월드컵</h2></div>
-          {renderCards(featuredWorldCups)}
+    <main className="home-shell hub-page worldcup-page">
+      <HubBackdrop />
+      <div className="home-container">
+        <HubNav />
+        <section className="worldcup-hero">
+          <div><span className="hub-kicker">PICK YOUR FAVORITE</span><h1>오늘은 무엇을<br />골라볼까요?</h1><p>준비된 월드컵을 시작하거나 나만의 대결을 만들어보세요.</p></div>
+          <button onClick={() => setLocation("/bracket/worldcup/create")}><Plus /> 월드컵 만들기</button>
         </section>
 
-        {mine.length > 0 && <section className="mt-14">
-          <h2 className="text-2xl font-bold mb-6">내가 만든 월드컵</h2>
-          {renderCards(mine, featuredWorldCups.length)}
-        </section>}
+        <div className="worldcup-layout">
+          <section className="worldcup-library">
+            <div className="worldcup-section-head">
+              <h2><Trophy /> 기본 제공 월드컵</h2>
+              <div>{filters.map(item => <button key={item.id} className={filter === item.id ? "is-active" : ""} onClick={() => setFilter(item.id)}>{item.label}</button>)}</div>
+            </div>
+            {visible.length > 0 ? <div className="worldcup-card-grid">
+              {visible.map((entry, index) => (
+                <article key={entry.id} className={`worldcup-card worldcup-art-${index % 4}`}>
+                  <button className="worldcup-card-hitbox" onClick={() => play(entry)} aria-label={`${entry.title} 바로 시작`} />
+                  <div className="worldcup-art"><WorldCupIcon entry={entry} /><span>{entry.round}강</span></div>
+                  <div className="worldcup-card-body"><h3>{entry.title}</h3><p>{entry.items.slice(0, 3).map(item => item.name).join(" · ")}</p><div><span>바로 시작</span><ArrowRight /></div></div>
+                </article>
+              ))}
+            </div> : <div className="worldcup-empty">이 카테고리에는 아직 기본 월드컵이 없어요.</div>}
+          </section>
 
-        <section className="mt-16 bg-white rounded-3xl border p-8 md:p-12 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gray-50 flex items-center justify-center"><Plus className="w-7 h-7" /></div>
-          <h2 className="text-3xl font-bold mt-5">원하는 월드컵이 없습니까?</h2>
-          <p className="text-gray-400 mt-3">직접 항목을 추가하고 나만의 취향 월드컵을 만들어보세요.</p>
-          <Button onClick={() => setLocation("/bracket/worldcup/create")} className="mt-7 px-7 h-12 rounded-full">
-            월드컵 만들기 <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-        </section>
-
-        <Footer />
+          <aside className="worldcup-mine">
+            <div className="worldcup-mine-head"><div><span className="hub-kicker">MY LIBRARY</span><h2>내가 만든 월드컵</h2></div><span>{mine.length}</span></div>
+            <div className="worldcup-mine-list">
+              {mine.length === 0 ? <div className="worldcup-mine-empty"><Trophy /><b>아직 만든 월드컵이 없어요</b><p>나만의 후보를 추가해 첫 대결을 만들어보세요.</p></div> : mine.slice(0, 4).map(entry => (
+                <button key={entry.id} onClick={() => play(entry)}><span><Trophy /></span><div><b>{entry.title}</b><small>{entry.round}강 · {entry.items.length}개 후보</small></div><Play /></button>
+              ))}
+            </div>
+            <button className="worldcup-create-tile" onClick={() => setLocation("/bracket/worldcup/create")}><Plus /><span>새로운 월드컵 만들기</span></button>
+          </aside>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

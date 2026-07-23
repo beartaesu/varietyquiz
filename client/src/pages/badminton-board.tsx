@@ -83,7 +83,8 @@ export default function BadmintonBoardPage() {
   const historicalValidation = useMemo(() => validateSchedule(players, rounds), [players, rounds]);
   const restCounts = historicalValidation.restCounts;
   const defaultDoublesCourts = session ? Math.min(session.requestedCourts, Math.floor(players.length / 4)) : 0;
-  const defaultRestCount = players.length - defaultDoublesCourts * 4;
+  const defaultSinglesCount = players.length >= 2 && players.length < 4 ? 2 : 0;
+  const defaultRestCount = players.length - defaultDoublesCourts * 4 - defaultSinglesCount;
 
   const persist = (next: BadmintonSession) => {
     const saved = saveSession(next);
@@ -101,14 +102,14 @@ export default function BadmintonBoardPage() {
     setMessage(text);
   };
 
-  const createOne = (allowRestImbalance: boolean) => {
+  const createOne = (allowRestImbalance: boolean, candidateIndex = 0) => {
     if (!session) return null;
     if (!lineup.valid) throw new ScheduleRuleError(lineup.message, ["invalid_partition"]);
     if (allowRestImbalance && session.settings.requireExceptionReason && !exceptionReason.trim()) {
       throw new Error("예외 승인 사유를 입력해주세요.");
     }
     const resting = players.filter(player => lineup.effectiveRestIds.has(player.id));
-    const singles = players.filter(player => selectedSoloIds.has(player.id));
+    const singles = players.filter(player => lineup.soloIds.has(player.id));
     const resolvedFixedGap = session.settings.restGapMode === "fixed" && session.settings.fixedMinimumGap === 0 && resting.length
       ? calculateRestRule(players.length, resting.length, "dynamic").minimumGap
       : session.settings.fixedMinimumGap;
@@ -117,6 +118,7 @@ export default function BadmintonBoardPage() {
       fixedMinimumGap: resolvedFixedGap,
       allowRestImbalance,
       exceptionReason,
+      candidateIndex,
     }).round;
   };
 
@@ -124,12 +126,12 @@ export default function BadmintonBoardPage() {
     setMessage("");
     setApprovalNeeded(false);
     try {
-      const first = createOne(allowRestImbalance);
+      const first = createOne(allowRestImbalance, 0);
       if (!first) return;
       const candidates = [first];
       if (session?.settings.enableAlternatives) {
         for (let index = 0; index < 2; index++) {
-          const candidate = createOne(allowRestImbalance);
+          const candidate = createOne(allowRestImbalance, index + 1);
           if (candidate) candidates.push(candidate);
         }
       }
@@ -164,7 +166,7 @@ export default function BadmintonBoardPage() {
 
   const applySuggested = () => {
     setSelectedRestIds(new Set(restOrder.slice(0, defaultRestCount)));
-    setSelectedSoloIds(new Set());
+    setSelectedSoloIds(new Set(defaultSinglesCount ? restOrder.slice(defaultRestCount, defaultRestCount + defaultSinglesCount) : []));
     setSelectedGameIds(new Set());
     setApprovalNeeded(false);
     setMessage("");
@@ -267,11 +269,11 @@ export default function BadmintonBoardPage() {
 
         <section className="bg-white rounded-3xl border p-5 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">이번 라운드 선택</h1><p className="text-sm text-gray-400 mt-1">경기·휴식·단식을 자유롭게 선택하고 만들기 버튼에서 검증합니다.</p></div>{!draft && <div className="flex gap-2"><Button variant="outline" onClick={() => persist({ ...session, restOrder: [...restOrder].sort(() => Math.random() - 0.5) })} disabled={rounds.length > 0}><Shuffle className="w-4 h-4 mr-2" />순서 섞기</Button><Button onClick={applySuggested}>추천 적용</Button></div>}</div>
-          <div className="mt-4 rounded-xl border bg-gray-50 p-3 text-sm"><b>휴식 기준:</b> {session.settings.restGapMode === "fixed" ? `세션 고정 · ${session.settings.fixedMinimumGap}라운드 차이` : "라운드별 동적 계산"} · <b>현재 구성:</b> 휴식 {lineup.effectiveRestIds.size}명{lineup.automaticRestIds.size ? ` (자동 ${lineup.automaticRestIds.size}명)` : ""} · 단식 {selectedSoloIds.size}명 · 복식 {lineup.doublesPlayerCount}명</div>
+          <div className="mt-4 rounded-xl border bg-gray-50 p-3 text-sm"><b>휴식 기준:</b> {session.settings.restGapMode === "fixed" ? `세션 고정 · ${session.settings.fixedMinimumGap}라운드 차이` : "라운드별 동적 계산"} · <b>현재 구성:</b> 휴식 {lineup.effectiveRestIds.size}명{lineup.automaticRestIds.size ? ` (자동 ${lineup.automaticRestIds.size}명)` : ""} · 단식 {lineup.soloIds.size}명 · 복식 {lineup.doublesPlayerCount}명</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2 mt-5">
             {players.map(player => {
               const resting = selectedRestIds.has(player.id);
-              const solo = selectedSoloIds.has(player.id);
+              const solo = lineup.soloIds.has(player.id);
               const automatic = lineup.automaticRestIds.has(player.id);
               const effectiveRest = resting || automatic;
               const gameActive = !effectiveRest && !solo;

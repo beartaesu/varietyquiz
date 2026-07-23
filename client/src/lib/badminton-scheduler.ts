@@ -94,11 +94,21 @@ export interface FlexibleLineup {
   message: string;
 }
 
+export interface RepeatRuleSnapshot {
+  opponentCapacity: number;
+  previousEncounterSlots: number;
+  currentEncounterSlots: number;
+  totalEncounterSlots: number;
+  unavoidableRepeatSlots: number;
+  strict: boolean;
+}
+
 export interface ManualRoundOptions {
   restGapMode: RestGapMode;
   fixedMinimumGap: number;
   allowRestImbalance?: boolean;
   exceptionReason?: string;
+  candidateIndex?: number;
 }
 
 export class ScheduleRuleError extends Error {
@@ -125,6 +135,31 @@ export function calculateRestRule(
   };
 }
 
+/**
+ * 한 참가자가 아직 만나지 않은 상대만으로 그룹을 만들 수 있는지 계산합니다.
+ * 가능한 상대 수는 전체 참가자 수 - 1이고, 한 경기에서 사용하는 상대 슬롯은
+ * 해당 경기 인원 - 1입니다. 누적 슬롯이 가능한 상대 수를 넘는 순간부터는
+ * 비둘기집 원리에 따라 최소 한 번의 재매칭이 불가피합니다.
+ */
+export function calculateRepeatRule(
+  participantCount: number,
+  previousEncounterSlots: number,
+  currentGroupSize: number,
+): RepeatRuleSnapshot {
+  const opponentCapacity = Math.max(0, participantCount - 1);
+  const currentEncounterSlots = Math.max(0, currentGroupSize - 1);
+  const totalEncounterSlots = Math.max(0, previousEncounterSlots) + currentEncounterSlots;
+  const unavoidableRepeatSlots = Math.max(0, totalEncounterSlots - opponentCapacity);
+  return {
+    opponentCapacity,
+    previousEncounterSlots: Math.max(0, previousEncounterSlots),
+    currentEncounterSlots,
+    totalEncounterSlots,
+    unavoidableRepeatSlots,
+    strict: unavoidableRepeatSlots === 0,
+  };
+}
+
 export function calculateFlexibleLineup(
   players: SchedulePlayer[],
   requestedCourts: number,
@@ -133,16 +168,26 @@ export function calculateFlexibleLineup(
   restOrder: number[],
   explicitGameIds: Set<number> = new Set(),
 ): FlexibleLineup {
-  const overlap = [...explicitRestIds].some(id => soloIds.has(id) || explicitGameIds.has(id))
-    || [...soloIds].some(id => explicitGameIds.has(id));
-  const singlesEven = soloIds.size % 2 === 0;
-  const singlesGames = singlesEven ? soloIds.size / 2 : 0;
-  const availableDoublesCourts = requestedCourts - singlesGames;
   const ordered = [
     ...restOrder.map(id => players.find(player => player.id === id)).filter((player): player is SchedulePlayer => Boolean(player)),
     ...players.filter(player => !restOrder.includes(player.id)),
   ];
-  const eligible = ordered.filter(player => !explicitRestIds.has(player.id) && !soloIds.has(player.id));
+  const shouldAutoCreateSingles = requestedCourts > 0
+    && players.length >= 2
+    && players.length < 4
+    && explicitRestIds.size === 0
+    && soloIds.size === 0
+    && explicitGameIds.size === 0;
+  const automaticSinglesRestCount = shouldAutoCreateSingles ? players.length - 2 : 0;
+  const effectiveSoloIds = shouldAutoCreateSingles
+    ? new Set(ordered.slice(automaticSinglesRestCount, automaticSinglesRestCount + 2).map(player => player.id))
+    : soloIds;
+  const overlap = [...explicitRestIds].some(id => effectiveSoloIds.has(id) || explicitGameIds.has(id))
+    || [...effectiveSoloIds].some(id => explicitGameIds.has(id));
+  const singlesEven = effectiveSoloIds.size % 2 === 0;
+  const singlesGames = singlesEven ? effectiveSoloIds.size / 2 : 0;
+  const availableDoublesCourts = requestedCourts - singlesGames;
+  const eligible = ordered.filter(player => !explicitRestIds.has(player.id) && !effectiveSoloIds.has(player.id));
   const remaining = eligible;
   const doublesGames = availableDoublesCourts >= 0
     ? Math.min(Math.floor(remaining.length / 4), availableDoublesCourts)
@@ -166,7 +211,7 @@ export function calculateFlexibleLineup(
     explicitGameIds,
     automaticRestIds,
     effectiveRestIds,
-    soloIds,
+    soloIds: effectiveSoloIds,
     doublesPlayerCount,
     doublesGames,
     singlesGames,
@@ -177,18 +222,6 @@ export function calculateFlexibleLineup(
 
 const pairKey = (a: SchedulePlayer, b: SchedulePlayer) =>
   [a.id, b.id].sort((x, y) => x - y).join(":");
-
-const restKey = (players: SchedulePlayer[]) =>
-  players.map(player => player.id).sort((a, b) => a - b).join(":");
-
-function shuffled<T>(items: T[]): T[] {
-  const result = [...items];
-  for (let index = result.length - 1; index > 0; index--) {
-    const target = Math.floor(Math.random() * (index + 1));
-    [result[index], result[target]] = [result[target], result[index]];
-  }
-  return result;
-}
 
 function isApproved(round: ScheduleRound, issue: ValidationIssue) {
   return issue.code === "rest_imbalance"
@@ -202,10 +235,8 @@ export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRoun
   const cumulativeRestSpreads: number[] = [];
   const issues: ValidationIssue[] = [];
   const approvedIssues: ValidationIssue[] = [];
-  const restGroups = new Map<string, number>();
   const lastRestRound = new Map<number, number>();
   const lastGroup = new Map<number, Set<number>>();
-  const groupHistory = new Map<number, Set<number>[]>();
   const groupmateRepeatCounts: Record<string, number> = {};
   const rematchCounts: Record<string, number> = Object.fromEntries(players.map(player => [player.name, 0]));
 
@@ -243,11 +274,6 @@ export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRoun
       lastRestRound.set(player.id, round.round);
     });
 
-    const currentRestKey = restKey(round.resting);
-    if (round.resting.length && restGroups.has(currentRestKey)) {
-      addIssue(round, { code: "duplicate_rest_group", round: round.round, message: `${round.round}라운드 휴식 조합이 ${restGroups.get(currentRestKey)}라운드와 같습니다.` });
-    } else if (round.resting.length) restGroups.set(currentRestKey, round.round);
-
     if (round.courts.length > round.courtLimit) {
       addIssue(round, { code: "court_limit", round: round.round, message: `${round.round}라운드 사용 코트 수가 제한을 초과합니다.` });
     }
@@ -263,14 +289,6 @@ export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRoun
         const previous = lastGroup.get(player.id);
         const overlap = previous ? [...others].filter(id => previous.has(id)).length : 0;
         rematchCounts[player.name] = (rematchCounts[player.name] || 0) + overlap;
-        if (overlap >= 2) {
-          addIssue(round, { code: "immediate_rematch", round: round.round, playerIds: [player.id], message: `${round.round}라운드 ${player.name}: 직전 경기 인원 ${overlap}명 재매칭` });
-        }
-        const history = groupHistory.get(player.id) || [];
-        if (history.length >= 2 && [...others].some(id => history.at(-1)!.has(id) && history.at(-2)!.has(id))) {
-          addIssue(round, { code: "three_consecutive_group", round: round.round, playerIds: [player.id], message: `${round.round}라운드 ${player.name}: 같은 참가자와 3경기 연속` });
-        }
-        groupHistory.set(player.id, [...history, others]);
         lastGroup.set(player.id, others);
       });
       for (let first = 0; first < court.players.length; first++) {
@@ -280,6 +298,9 @@ export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRoun
         }
       }
     });
+
+    validateRoundRepeatFairness(players, round, rounds.slice(0, roundIndex))
+      .forEach(issue => addIssue(round, issue));
 
     players.forEach(player => {
       const places = assigned.get(player.id) || [];
@@ -321,31 +342,307 @@ export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRoun
   };
 }
 
-function scoreGroups(courts: CourtMatch[], previousRounds: ScheduleRound[]) {
-  const lastGroup = new Map<number, Set<number>>();
+interface MatchHistory {
+  pairCounts: Map<string, number>;
+  encounterSlots: Map<number, number>;
+  recentGroups: Map<number, Set<number>[]>;
+}
+
+interface FairnessScore {
+  maximumPairCount: number;
+  consecutiveTriplePairs: number;
+  squaredPairCost: number;
+  skillImbalance: number;
+  maximumPairPlayerIds: number[];
+  consecutiveTriplePlayerIds: number[];
+}
+
+function collectMatchHistory(previousRounds: ScheduleRound[]): MatchHistory {
   const pairCounts = new Map<string, number>();
+  const encounterSlots = new Map<number, number>();
+  const recentGroups = new Map<number, Set<number>[]>();
   previousRounds.forEach(round => round.courts.forEach(court => {
-    court.players.forEach(player => lastGroup.set(player.id, new Set(court.players.filter(candidate => candidate.id !== player.id).map(candidate => candidate.id))));
+    court.players.forEach(player => {
+      const group = new Set(court.players.filter(candidate => candidate.id !== player.id).map(candidate => candidate.id));
+      recentGroups.set(player.id, [...(recentGroups.get(player.id) || []), group].slice(-2));
+      encounterSlots.set(player.id, (encounterSlots.get(player.id) || 0) + Math.max(0, court.players.length - 1));
+    });
     for (let first = 0; first < court.players.length; first++) for (let second = first + 1; second < court.players.length; second++) {
       const key = pairKey(court.players[first], court.players[second]);
       pairCounts.set(key, (pairCounts.get(key) || 0) + 1);
     }
   }));
-  let score = 0;
+  return { pairCounts, encounterSlots, recentGroups };
+}
+
+function evaluateFairness(
+  courts: CourtMatch[],
+  history: MatchHistory,
+  targetSkill: number,
+): FairnessScore {
+  let maximumPairCount = 0;
+  let consecutiveTriplePairs = 0;
+  let squaredPairCost = 0;
+  let skillImbalance = 0;
+  const maximumPairPlayerIds = new Set<number>();
+  const consecutiveTriplePlayerIds = new Set<number>();
+
   courts.forEach(court => {
     const averageSkill = court.players.reduce((sum, player) => sum + player.skill, 0) / court.players.length;
-    score += Math.abs(averageSkill - 2.5) * 2;
-    court.players.forEach(player => {
-      const others = court.players.filter(candidate => candidate.id !== player.id);
-      const overlap = others.filter(candidate => lastGroup.get(player.id)?.has(candidate.id)).length;
-      if (overlap >= 2) score += 100_000;
-      else score += overlap * 1_000;
-    });
-    for (let first = 0; first < court.players.length; first++) for (let second = first + 1; second < court.players.length; second++) {
-      score += (pairCounts.get(pairKey(court.players[first], court.players[second])) || 0) * 50;
+    skillImbalance += Math.abs(averageSkill - targetSkill);
+    for (let first = 0; first < court.players.length; first++) {
+      for (let second = first + 1; second < court.players.length; second++) {
+        const a = court.players[first];
+        const b = court.players[second];
+        const nextPairCount = (history.pairCounts.get(pairKey(a, b)) || 0) + 1;
+        squaredPairCost += nextPairCount * nextPairCount;
+        if (nextPairCount > maximumPairCount) {
+          maximumPairCount = nextPairCount;
+          maximumPairPlayerIds.clear();
+          maximumPairPlayerIds.add(a.id);
+          maximumPairPlayerIds.add(b.id);
+        } else if (nextPairCount === maximumPairCount) {
+          maximumPairPlayerIds.add(a.id);
+          maximumPairPlayerIds.add(b.id);
+        }
+
+        const aRecent = history.recentGroups.get(a.id) || [];
+        const bRecent = history.recentGroups.get(b.id) || [];
+        const isThreeConsecutive = (aRecent.length >= 2 && aRecent.at(-1)!.has(b.id) && aRecent.at(-2)!.has(b.id))
+          || (bRecent.length >= 2 && bRecent.at(-1)!.has(a.id) && bRecent.at(-2)!.has(a.id));
+        if (isThreeConsecutive) {
+          consecutiveTriplePairs += 1;
+          consecutiveTriplePlayerIds.add(a.id);
+          consecutiveTriplePlayerIds.add(b.id);
+        }
+      }
     }
   });
-  return score + Math.random();
+
+  return {
+    maximumPairCount,
+    consecutiveTriplePairs,
+    squaredPairCost,
+    skillImbalance,
+    maximumPairPlayerIds: [...maximumPairPlayerIds],
+    consecutiveTriplePlayerIds: [...consecutiveTriplePlayerIds],
+  };
+}
+
+function compareFairness(first: FairnessScore, second: FairnessScore) {
+  return first.maximumPairCount - second.maximumPairCount
+    || first.consecutiveTriplePairs - second.consecutiveTriplePairs
+    || first.squaredPairCost - second.squaredPairCost
+    || first.skillImbalance - second.skillImbalance;
+}
+
+function scoreGroup(
+  group: SchedulePlayer[],
+  history: MatchHistory,
+  participantCount: number,
+  targetSkill: number,
+) {
+  let score = 0;
+  const averageSkill = group.reduce((sum, player) => sum + player.skill, 0) / group.length;
+  score += Math.abs(averageSkill - targetSkill) * 10;
+  for (let first = 0; first < group.length; first++) {
+    for (let second = first + 1; second < group.length; second++) {
+      const a = group[first];
+      const b = group[second];
+      const priorMeetings = history.pairCounts.get(pairKey(a, b)) || 0;
+      const aCapacity = Math.max(1, participantCount - 1);
+      const bCapacity = Math.max(1, participantCount - 1);
+      const aExpectedRepeats = Math.floor((history.encounterSlots.get(a.id) || 0) / aCapacity);
+      const bExpectedRepeats = Math.floor((history.encounterSlots.get(b.id) || 0) / bCapacity);
+      const expectedRepeats = Math.min(aExpectedRepeats, bExpectedRepeats);
+      const excessMeetings = Math.max(0, priorMeetings - expectedRepeats);
+      score += priorMeetings * 20 + excessMeetings * excessMeetings * 400;
+
+      const aRecent = history.recentGroups.get(a.id) || [];
+      const bRecent = history.recentGroups.get(b.id) || [];
+      if (aRecent.at(-1)?.has(b.id) || bRecent.at(-1)?.has(a.id)) score += 120;
+      if (
+        (aRecent.length >= 2 && aRecent.at(-1)!.has(b.id) && aRecent.at(-2)!.has(b.id))
+        || (bRecent.length >= 2 && bRecent.at(-1)!.has(a.id) && bRecent.at(-2)!.has(a.id))
+      ) {
+        score += 240;
+      }
+    }
+  }
+  return score;
+}
+
+function rotate<T>(items: T[], offset: number) {
+  if (!items.length) return items;
+  const normalized = ((offset % items.length) + items.length) % items.length;
+  return [...items.slice(normalized), ...items.slice(0, normalized)];
+}
+
+function chooseBestDoublesGroup(
+  remaining: SchedulePlayer[],
+  history: MatchHistory,
+  participantCount: number,
+  targetSkill: number,
+  variant: number,
+) {
+  if (remaining.length === 4) return [...remaining];
+  const ordered = rotate([...remaining].sort((a, b) => a.id - b.id), variant);
+  const anchor = ordered[0];
+  const candidates = ordered.slice(1);
+  let best: SchedulePlayer[] | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let first = 0; first < candidates.length - 2; first++) {
+    for (let second = first + 1; second < candidates.length - 1; second++) {
+      for (let third = second + 1; third < candidates.length; third++) {
+        const group = [anchor, candidates[first], candidates[second], candidates[third]];
+        const score = scoreGroup(group, history, participantCount, targetSkill);
+        if (score < bestScore) {
+          best = group;
+          bestScore = score;
+        }
+      }
+    }
+  }
+  return best || remaining.slice(0, 4);
+}
+
+function createDeterministicCourts(
+  active: SchedulePlayer[],
+  doublesCourts: number,
+  soloPlayers: SchedulePlayer[],
+  previousRounds: ScheduleRound[],
+  participantCount: number,
+  variant: number,
+) {
+  const history = collectMatchHistory(previousRounds);
+  const targetSkill = active.length
+    ? active.reduce((sum, player) => sum + player.skill, 0) / active.length
+    : 0;
+  let remaining = [...active];
+  const courts: CourtMatch[] = [];
+  for (let courtIndex = 0; courtIndex < doublesCourts; courtIndex++) {
+    const group = chooseBestDoublesGroup(
+      remaining,
+      history,
+      participantCount,
+      targetSkill,
+      variant + courtIndex,
+    );
+    courts.push({ players: group, type: "doubles" });
+    const selectedIds = new Set(group.map(player => player.id));
+    remaining = remaining.filter(player => !selectedIds.has(player.id));
+  }
+  for (let index = 0; index < soloPlayers.length; index += 2) {
+    courts.push({ players: [soloPlayers[index], soloPlayers[index + 1]], type: "singles" });
+  }
+  return courts;
+}
+
+function uniqueCourtKey(courts: CourtMatch[]) {
+  return courts
+    .map(court => `${court.type}:${court.players.map(player => player.id).sort((a, b) => a - b).join(",")}`)
+    .sort()
+    .join("|");
+}
+
+function createRankedCourtCandidates(
+  active: SchedulePlayer[],
+  doublesCourts: number,
+  soloPlayers: SchedulePlayer[],
+  previousRounds: ScheduleRound[],
+  participantCount: number,
+) {
+  const history = collectMatchHistory(previousRounds);
+  const allActive = [...active, ...soloPlayers];
+  const targetSkill = allActive.length
+    ? allActive.reduce((sum, player) => sum + player.skill, 0) / allActive.length
+    : 0;
+  const variantCount = Math.max(1, Math.min(active.length || 1, Math.max(3, doublesCourts * 2)));
+  const unique = new Map<string, { courts: CourtMatch[]; fairness: FairnessScore }>();
+  for (let variant = 0; variant < variantCount; variant++) {
+    const courts = createDeterministicCourts(
+      active,
+      doublesCourts,
+      soloPlayers,
+      previousRounds,
+      participantCount,
+      variant,
+    );
+    const key = uniqueCourtKey(courts);
+    if (!unique.has(key)) unique.set(key, { courts, fairness: evaluateFairness(courts, history, targetSkill) });
+  }
+  return [...unique.values()].sort((first, second) => compareFairness(first.fairness, second.fairness));
+}
+
+function validateRoundRepeatFairness(
+  players: SchedulePlayer[],
+  round: ScheduleRound,
+  previousRounds: ScheduleRound[],
+): ValidationIssue[] {
+  const assignedIds = round.courts.flatMap(court => court.players.map(player => player.id));
+  const validCourtSizes = round.courts.every(court => court.players.length === (court.type === "singles" ? 2 : 4));
+  if (!validCourtSizes || new Set(assignedIds).size !== assignedIds.length) return [];
+
+  const doublesPlayers = round.courts.filter(court => court.type === "doubles").flatMap(court => court.players);
+  const soloPlayers = round.courts.filter(court => court.type === "singles").flatMap(court => court.players);
+  const history = collectMatchHistory(previousRounds);
+  const targetSkill = assignedIds.length
+    ? round.courts.flatMap(court => court.players).reduce((sum, player) => sum + player.skill, 0) / assignedIds.length
+    : 0;
+  const current = evaluateFairness(round.courts, history, targetSkill);
+
+  const activePlayers = [...doublesPlayers, ...soloPlayers];
+  const activeById = new Map(activePlayers.map(player => [player.id, player]));
+  const hasLocallyAvoidablePair = round.courts.some(court => court.players.some(player => {
+    const selectedOthers = court.players.filter(candidate => candidate.id !== player.id);
+    const availableOthers = activePlayers.filter(candidate => candidate.id !== player.id);
+    const minimumAvailableCount = Math.min(
+      ...availableOthers.map(candidate => history.pairCounts.get(pairKey(player, candidate)) || 0),
+    );
+    return selectedOthers.some(candidate => (history.pairCounts.get(pairKey(player, candidate)) || 0) > minimumAvailableCount + 1);
+  }));
+  if (!hasLocallyAvoidablePair && current.consecutiveTriplePairs === 0) return [];
+
+  const rankedCandidates = createRankedCourtCandidates(
+    doublesPlayers,
+    round.courts.filter(court => court.type === "doubles").length,
+    soloPlayers,
+    previousRounds,
+    players.length,
+  );
+  const best = rankedCandidates[0]?.fairness;
+  if (!best) return [];
+
+  const pairSlots = round.courts.reduce(
+    (sum, court) => sum + (court.players.length * (court.players.length - 1)) / 2,
+    0,
+  );
+  const issues: ValidationIssue[] = [];
+  const excessiveMaximum = current.maximumPairCount > best.maximumPairCount + 1;
+  const excessiveDistribution = current.squaredPairCost > best.squaredPairCost + pairSlots * 2;
+  if (excessiveMaximum || excessiveDistribution) {
+    const names = current.maximumPairPlayerIds
+      .map(id => activeById.get(id)?.name)
+      .filter((name): name is string => Boolean(name));
+    issues.push({
+      code: "immediate_rematch",
+      round: round.round,
+      playerIds: current.maximumPairPlayerIds,
+      message: `${round.round}라운드 반복 편중: ${names.join("·") || "일부 참가자"} 누적 ${current.maximumPairCount}회, 가능한 배치 기준 ${best.maximumPairCount}회`,
+    });
+  }
+  if (current.consecutiveTriplePairs > best.consecutiveTriplePairs) {
+    const names = current.consecutiveTriplePlayerIds
+      .map(id => activeById.get(id)?.name)
+      .filter((name): name is string => Boolean(name));
+    issues.push({
+      code: "three_consecutive_group",
+      round: round.round,
+      playerIds: current.consecutiveTriplePlayerIds,
+      message: `${round.round}라운드 3경기 연속 재매칭을 피할 수 있습니다: ${names.join("·") || "일부 참가자"}`,
+    });
+  }
+  return issues;
 }
 
 export function generateManualRound(
@@ -367,24 +664,15 @@ export function generateManualRound(
   if (doublesCourts + singlesCourts > requestedCourts) throw new ScheduleRuleError("현재 구성에 필요한 코트 수가 요청 코트 수를 초과합니다.", ["court_limit"]);
   if (doublesCourts + singlesCourts === 0) throw new ScheduleRuleError("최소 한 경기 이상 구성해야 합니다.", ["invalid_partition"]);
 
-  let bestCourts: CourtMatch[] | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (let attempt = 0; attempt < 3000; attempt++) {
-    const ordered = shuffled(active);
-    const courts: CourtMatch[] = Array.from({ length: doublesCourts }, (_, index) => ({
-      players: ordered.slice(index * 4, index * 4 + 4),
-      type: "doubles",
-    }));
-    for (let index = 0; index < soloPlayers.length; index += 2) {
-      courts.push({ players: [soloPlayers[index], soloPlayers[index + 1]], type: "singles" });
-    }
-    const score = scoreGroups(courts, previousRounds);
-    if (score < bestScore) {
-      bestScore = score;
-      bestCourts = courts;
-    }
-    if (score < 1_000) break;
-  }
+  const rankedCandidates = createRankedCourtCandidates(
+    active,
+    doublesCourts,
+    soloPlayers,
+    previousRounds,
+    players.length,
+  );
+  const candidateIndex = Math.max(0, options.candidateIndex || 0);
+  const bestCourts = rankedCandidates[candidateIndex % rankedCandidates.length]?.courts;
   if (!bestCourts) throw new ScheduleRuleError("유효한 게임 그룹을 만들 수 없습니다.", ["invalid_partition"]);
 
   const roundNumber = previousRounds.length + 1;

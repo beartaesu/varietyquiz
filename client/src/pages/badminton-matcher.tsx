@@ -15,7 +15,7 @@ import {
   saveSession,
   setActiveSession,
 } from "@/lib/badminton-session";
-import { ArrowRight, Clock3, Home, Play, Plus, Settings2, Trash2 } from "lucide-react";
+import { ArrowRight, Clock3, Home, Play, Plus, RotateCcw, Settings2, Trash2 } from "lucide-react";
 
 type SkillLevel = "A" | "B" | "C" | "D" | "E" | "입문";
 interface PlayerInput { id: number; name: string; skill: SkillLevel; }
@@ -63,7 +63,8 @@ export default function BadmintonMatcherPage() {
     [players],
   );
   const defaultCourts = Math.min(courtCount, Math.floor(players.length / 4));
-  const defaultRestCount = players.length - defaultCourts * 4;
+  const defaultSinglesCount = players.length >= 2 && players.length < 4 ? 2 : 0;
+  const defaultRestCount = players.length - defaultCourts * 4 - defaultSinglesCount;
   const fixedRule = calculateRestRule(players.length, defaultRestCount, "dynamic");
 
   const addNames = (raw: string) => {
@@ -88,7 +89,7 @@ export default function BadmintonMatcherPage() {
       restOrder: shuffle(converted.map(player => player.id)),
       restGapMode,
       fixedMinimumGap: fixedRule.minimumGap,
-      flags,
+      flags: { ...flags, enableLiveMode: false },
     });
     saveSession(session);
     setLocation("/bracket/badminton/board");
@@ -101,11 +102,26 @@ export default function BadmintonMatcherPage() {
 
   const toggleFlag = (key: keyof BadmintonFeatureFlags) => setFlags(previous => ({ ...previous, [key]: !previous[key] }));
 
+  const resetRoster = () => {
+    if (!window.confirm("저장된 참가자 명단과 코트 설정을 초기화할까요? 기존 세션 기록은 유지됩니다.")) return;
+    localStorage.removeItem("badminton_players_v3");
+    localStorage.removeItem("badminton_court_count_v2");
+    setPlayers([]);
+    setCourtCount(4);
+    setName("");
+    setBulkNames("");
+    setSessionName("");
+    setError("");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br p-4 py-8">
       <div className="max-w-5xl mx-auto space-y-7">
-        <Button variant="outline" onClick={() => setLocation("/")}><Home className="w-4 h-4 mr-2" />홈으로</Button>
-        <header><p className="text-blue-400 font-semibold">SESSION SETUP</p><h1 className="text-4xl md:text-5xl font-bold mt-2">배드민턴 세션 설정</h1><p className="text-gray-400 mt-3">참가자와 운영 기준만 정하고, 휴식·단식 선택은 다음 화면에서 진행합니다.</p></header>
+        <Button variant="outline" onClick={() => setLocation("/matching")}><Home className="w-4 h-4 mr-2" />매칭 방식 선택</Button>
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div><p className="text-blue-400 font-semibold">SESSION SETUP</p><h1 className="text-4xl md:text-5xl font-bold mt-2">배드민턴 세션 설정</h1><p className="text-gray-400 mt-3">참가자와 운영 기준만 정하고, 휴식·단식 선택은 다음 화면에서 진행합니다.</p></div>
+          <Button variant="outline" onClick={resetRoster} disabled={players.length === 0 && courtCount === 4}><RotateCcw className="w-4 h-4 mr-2" />새 명단으로 시작</Button>
+        </header>
 
         {sessions.length > 0 && <section className="bg-white rounded-3xl border p-5 md:p-6">
           <div className="flex items-center gap-2"><Clock3 className="w-5 h-5" /><h2 className="text-xl font-bold">기존 세션 계속하기</h2></div>
@@ -149,13 +165,16 @@ export default function BadmintonMatcherPage() {
           <div className="flex items-center gap-2"><Settings2 className="w-5 h-5" /><h2 className="text-2xl font-bold">3. 시험 기능</h2></div>
           <div className="grid sm:grid-cols-2 gap-3 mt-5">
             {([
-              ["confirmBeforeFinalize", "라운드 확정 전 확인"],
-              ["autoSaveDraft", "작성 중 배치 자동 저장"],
-              ["requireExceptionReason", "예외 승인 사유 필수"],
-              ["enableAlternatives", "자동 배치 후보 3개"],
-              ["enableLiveMode", "실시간 코트 운영 모드"],
-              ["showSessionSummary", "세션 종료 요약"],
-            ] as [keyof BadmintonFeatureFlags, string][]).map(([key, label]) => <button key={key} onClick={() => toggleFlag(key)} className={`flex items-center justify-between rounded-2xl border p-4 ${flags[key] ? "border-blue-400 bg-blue-600/10" : "bg-gray-50"}`}><span className="font-semibold">{label}</span><span className={`rounded-full px-2 py-1 text-xs ${flags[key] ? "bg-blue-600 text-white" : "bg-white"}`}>{flags[key] ? "ON" : "OFF"}</span></button>)}
+              ["confirmBeforeFinalize", "라운드 확정 전 확인", ""],
+              ["autoSaveDraft", "작성 중 배치 자동 저장", ""],
+              ["requireExceptionReason", "예외 승인 사유 필수", ""],
+              ["enableAlternatives", "자동 배치 후보 3개", "같은 참가자와 휴식 조건으로 서로 다른 배치 3가지를 제안합니다."],
+              ["showSessionSummary", "세션 종료 요약", ""],
+            ] as [keyof BadmintonFeatureFlags, string, string][]).map(([key, label, description]) => <button key={key} onClick={() => toggleFlag(key)} className={`flex items-center justify-between gap-3 rounded-2xl border p-4 text-left ${flags[key] ? "border-blue-400 bg-blue-600/10" : "bg-gray-50"}`}><span><span className="font-semibold">{label}</span>{description && <span className="mt-1 block text-xs font-normal text-gray-400">{description}</span>}</span><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${flags[key] ? "bg-blue-600 text-white" : "bg-white"}`}>{flags[key] ? "ON" : "OFF"}</span></button>)}
+            <div aria-disabled="true" className="flex items-center justify-between gap-3 rounded-2xl border border-dashed bg-gray-50 p-4 text-left opacity-75">
+              <span><span className="font-semibold">실시간 코트 운영 모드</span><span className="mt-1 block text-xs font-normal text-gray-400">코트 상태 저장과 여러 기기 동기화를 준비하고 있습니다.</span></span>
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700">구현 중</span>
+            </div>
           </div>
         </section>
 

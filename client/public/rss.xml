@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>버라이어티 퀴즈</title>
+    <link>https://varietyquizquiz.com/</link>
+    <description>게임 매칭, 취향 월드컵, 예능 퀴즈를 한곳에서 즐겨보세요.</description>
+    <language>ko</language>
+    <item>
+      <title>버라이어티 퀴즈</title>
+      <link>https://varietyquizquiz.com/</link>
+      <guid>https://varietyquizquiz.com/</guid>
+      <description>취향 대결부터 게임 매칭까지 가볍게 시작해보세요.</description>
+    </item>
+  </channel>
+</rss>
