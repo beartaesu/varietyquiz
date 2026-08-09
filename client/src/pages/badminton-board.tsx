@@ -21,6 +21,13 @@ interface LiveCourtState { status: "ready" | "playing" | "finished"; startedAt?:
 
 const skillLabel = (skill: number) => (["입문", "E", "D", "C", "B", "A"][skill] || "입문");
 const draftKey = (sessionId: string) => `badminton_draft_v2_${sessionId}`;
+const slotKey = ({ court, position }: Slot) => `${court}:${position}`;
+
+const makeSwappedDraft = (draft: ScheduleRound, from: Slot, to: Slot): ScheduleRound => {
+  const courts = draft.courts.map(court => ({ ...court, players: [...court.players] }));
+  [courts[from.court].players[from.position], courts[to.court].players[to.position]] = [courts[to.court].players[to.position], courts[from.court].players[from.position]];
+  return { ...draft, courts };
+};
 
 export default function BadmintonBoardPage() {
   const [, setLocation] = useLocation();
@@ -82,6 +89,23 @@ export default function BadmintonBoardPage() {
   );
   const historicalValidation = useMemo(() => validateSchedule(players, rounds), [players, rounds]);
   const restCounts = historicalValidation.restCounts;
+  const availableSwapKeys = useMemo(() => {
+    const available = new Set<string>();
+    if (!draft || !selectedSlot) return available;
+
+    draft.courts.forEach((court, courtIndex) => {
+      court.players.forEach((_, position) => {
+        const target = { court: courtIndex, position };
+        if (slotKey(target) === slotKey(selectedSlot)) return;
+        const candidate = makeSwappedDraft(draft, selectedSlot, target);
+        const hasCurrentRoundIssue = validateSchedule(players, [...rounds, candidate]).issues
+          .some(issue => issue.round === candidate.round);
+        if (!hasCurrentRoundIssue) available.add(slotKey(target));
+      });
+    });
+
+    return available;
+  }, [draft, players, rounds, selectedSlot]);
   const defaultDoublesCourts = session ? Math.min(session.requestedCourts, Math.floor(players.length / 4)) : 0;
   const defaultSinglesCount = players.length >= 2 && players.length < 4 ? 2 : 0;
   const defaultRestCount = players.length - defaultDoublesCourts * 4 - defaultSinglesCount;
@@ -173,14 +197,38 @@ export default function BadmintonBoardPage() {
   };
 
   const swapSlots = (from: Slot, to: Slot) => {
-    if (!draft || (from.court === to.court && from.position === to.position)) return;
-    const courts = draft.courts.map(court => ({ ...court, players: [...court.players] }));
-    [courts[from.court].players[from.position], courts[to.court].players[to.position]] = [courts[to.court].players[to.position], courts[from.court].players[from.position]];
+    if (!draft) return;
+    if (slotKey(from) === slotKey(to)) {
+      setSelectedSlot(null);
+      return;
+    }
+    const nextDraft = makeSwappedDraft(draft, from, to);
+    const issues = validateSchedule(players, [...rounds, nextDraft]).issues
+      .filter(issue => issue.round === nextDraft.round);
+    if (issues.length) {
+      setMessage(`교환할 수 없는 조합입니다: ${issues.map(issue => issue.message).join(" / ")}`);
+      return;
+    }
     setUndoStack(previous => [...previous, draft]);
     setRedoStack([]);
-    setDraft({ ...draft, courts });
+    setDraft(nextDraft);
     setSelectedSlot(null);
-    setMessage("배치를 변경했습니다. 확정할 때 전체 검증을 다시 진행합니다.");
+    setMessage("검증 가능한 배치로 교환했습니다.");
+  };
+
+  const handleSlotClick = (target: Slot) => {
+    if (!selectedSlot) {
+      setSelectedSlot(target);
+      setMessage("초록색으로 표시된 참가자와 교환할 수 있습니다.");
+      return;
+    }
+    if (slotKey(selectedSlot) === slotKey(target)) {
+      setSelectedSlot(null);
+      setMessage("");
+      return;
+    }
+    if (!availableSwapKeys.has(slotKey(target))) return;
+    swapSlots(selectedSlot, target);
   };
 
   const undoMove = () => {
@@ -293,8 +341,11 @@ export default function BadmintonBoardPage() {
           {draft && <div className="grid grid-cols-1 gap-4 mt-6">{draft.courts.map((court, courtIndex) => {
             const live = liveCourts[courtIndex] || { status: "ready" as const };
             return <div key={courtIndex} className="rounded-3xl border bg-gray-50 p-4"><div className="flex flex-wrap items-center justify-between gap-2 mb-3"><div><h3 className="text-lg font-bold"><span className="text-blue-400">{draft.round}라운드</span> · 게임 {courtIndex + 1}</h3><span className="text-xs text-gray-400">{court.type === "singles" ? "단식 · 2명" : "복식 · 4명"}</span></div>{session.settings.enableLiveMode && <div className="flex items-center gap-2"><span className="font-mono text-sm">{elapsed(live)}</span>{live.status === "ready" && <Button size="sm" onClick={() => updateLiveCourt(courtIndex, "playing")}><Play className="w-3 h-3 mr-1" />시작</Button>}{live.status === "playing" && <Button size="sm" className="bg-amber-600" onClick={() => updateLiveCourt(courtIndex, "finished")}><Square className="w-3 h-3 mr-1" />종료</Button>}{live.status === "finished" && <Button size="sm" variant="outline" onClick={() => updateLiveCourt(courtIndex, "ready")}><RotateCcw className="w-3 h-3 mr-1" />초기화</Button>}</div>}</div><div className={`grid ${court.type === "singles" ? "grid-cols-2 max-w-xl" : "grid-cols-4"} gap-1.5 sm:gap-3`}>{court.players.map((player, position) => {
-              const active = selectedSlot?.court === courtIndex && selectedSlot.position === position;
-              return <button key={player.id} draggable onDragStart={() => setDraggedSlot({ court: courtIndex, position })} onDragOver={event => event.preventDefault()} onDrop={() => draggedSlot && swapSlots(draggedSlot, { court: courtIndex, position })} onDragEnd={() => setDraggedSlot(null)} onClick={() => selectedSlot ? swapSlots(selectedSlot, { court: courtIndex, position }) : setSelectedSlot({ court: courtIndex, position })} className={`min-w-0 min-h-24 rounded-xl border p-2 sm:p-4 text-center sm:text-left ${active ? "border-blue-300 bg-blue-600/20" : "bg-white"}`}><div className="flex justify-center sm:justify-between"><span className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center font-bold">{player.name.slice(0, 1)}</span><GripVertical className="hidden sm:block w-4 h-4 text-gray-400" /></div><b className="block mt-2 truncate">{player.name}</b><span className="block text-[10px] text-gray-400">{skillLabel(player.skill)}</span></button>;
+              const target = { court: courtIndex, position };
+              const active = selectedSlot ? slotKey(selectedSlot) === slotKey(target) : false;
+              const swapAvailable = Boolean(selectedSlot) && availableSwapKeys.has(slotKey(target));
+              const unavailable = Boolean(selectedSlot) && !active && !swapAvailable;
+              return <button key={player.id} disabled={unavailable} draggable={!unavailable} onDragStart={() => { setDraggedSlot(target); setSelectedSlot(target); }} onDragOver={event => { if (!unavailable) event.preventDefault(); }} onDrop={() => draggedSlot && swapSlots(draggedSlot, target)} onDragEnd={() => setDraggedSlot(null)} onClick={() => handleSlotClick(target)} aria-label={`${player.name}${swapAvailable ? ", 교환 가능" : unavailable ? ", 교환 불가" : ""}`} className={`min-w-0 min-h-24 rounded-xl border p-2 sm:p-4 text-center sm:text-left transition ${active ? "border-blue-400 bg-blue-600/20 ring-2 ring-blue-300" : swapAvailable ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-300 hover:bg-emerald-100" : unavailable ? "cursor-not-allowed bg-white opacity-35" : "bg-white"}`}><div className="flex justify-center sm:justify-between"><span className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center font-bold">{player.name.slice(0, 1)}</span><GripVertical className="hidden sm:block w-4 h-4 text-gray-400" /></div><b className="block mt-2 truncate">{player.name}</b><span className="block text-[10px] text-gray-400">{skillLabel(player.skill)}</span>{swapAvailable && <span className="block mt-1 text-[10px] font-semibold text-emerald-700">교환 가능</span>}</button>;
             })}</div></div>;
           })}</div>}
           {draft && message && <div className={`mt-5 rounded-2xl border p-4 ${draft.approvedExceptions.length ? "border-amber-400/40 bg-amber-500/10" : "bg-gray-50"}`}>{message}</div>}
