@@ -29,6 +29,10 @@ const makeSwappedDraft = (draft: ScheduleRound, from: Slot, to: Slot): ScheduleR
   return { ...draft, courts };
 };
 
+const exceptionLabel = (exception: ScheduleRound["approvedExceptions"][number]) => exception.code === "rest_imbalance"
+  ? `휴식 편차 ${exception.spread} 예외 승인`
+  : `휴식 간격 ${exception.actualGap ?? "-"}, 기준 ${exception.minimumGap ?? "-"} 예외 승인`;
+
 export default function BadmintonBoardPage() {
   const [, setLocation] = useLocation();
   const [session, setSession] = useState<BadmintonSession | null>(null);
@@ -48,6 +52,7 @@ export default function BadmintonBoardPage() {
   const [liveCourts, setLiveCourts] = useState<Record<number, LiveCourtState>>({});
   const [now, setNow] = useState(Date.now());
   const [showSummary, setShowSummary] = useState(false);
+  const [selectedSummaryRoundNumber, setSelectedSummaryRoundNumber] = useState<number | null>(null);
 
   useSEO({ title: "배드민턴 세션 운영", description: "휴식과 단식을 선택하고 라운드별 게임을 운영합니다", keywords: "배드민턴, 코트운영, 게임배치" });
 
@@ -109,6 +114,19 @@ export default function BadmintonBoardPage() {
   const defaultDoublesCourts = session ? Math.min(session.requestedCourts, Math.floor(players.length / 4)) : 0;
   const defaultSinglesCount = players.length >= 2 && players.length < 4 ? 2 : 0;
   const defaultRestCount = players.length - defaultDoublesCourts * 4 - defaultSinglesCount;
+  const directRestWarnings = useMemo(() => {
+    if (!session || !selectedRestIds.size) return [];
+    const minimumGap = session.settings.restGapMode === "fixed" && session.settings.fixedMinimumGap === 0 && lineup.effectiveRestIds.size
+      ? calculateRestRule(players.length, lineup.effectiveRestIds.size, "dynamic").minimumGap
+      : calculateRestRule(players.length, lineup.effectiveRestIds.size, session.settings.restGapMode, session.settings.fixedMinimumGap).minimumGap;
+    const nextRound = rounds.length + 1;
+    return players.flatMap(player => {
+      if (!selectedRestIds.has(player.id)) return [];
+      const previous = [...rounds].reverse().find(round => round.resting.some(resting => resting.id === player.id));
+      if (!previous || nextRound - previous.round >= minimumGap) return [];
+      return [{ player, previousRound: previous.round, actualGap: nextRound - previous.round, minimumGap }];
+    });
+  }, [lineup.effectiveRestIds.size, players, rounds, selectedRestIds, session]);
 
   const persist = (next: BadmintonSession) => {
     const saved = saveSession(next);
@@ -141,6 +159,7 @@ export default function BadmintonBoardPage() {
       restGapMode: session.settings.restGapMode,
       fixedMinimumGap: resolvedFixedGap,
       allowRestImbalance,
+      allowMinimumRestGapPlayerIds: [...selectedRestIds],
       exceptionReason,
       candidateIndex,
     }).round;
@@ -168,7 +187,7 @@ export default function BadmintonBoardPage() {
       setRedoStack([]);
       setLiveCourts(Object.fromEntries(first.courts.map((_, index) => [index, { status: "ready" }])));
       setMessage(first.approvedExceptions.length
-        ? `휴식 편차 ${first.approvedExceptions[0].spread}을(를) 예외 승인해 배치를 만들었습니다.`
+        ? `${first.approvedExceptions.map(exceptionLabel).join(" · ")}으로 배치를 만들었습니다.`
         : "게임 그룹을 만들었습니다. 카드를 옮기거나 다시 배치한 뒤 검증할 수 있습니다.");
     } catch (error) {
       setDraft(null);
@@ -251,7 +270,7 @@ export default function BadmintonBoardPage() {
     if (!draft) return false;
     const validation = validateSchedule(players, [...rounds, draft]);
     const currentIssues = validation.issues.filter(issue => issue.round === draft.round);
-    setMessage(currentIssues.length ? `검증 실패: ${currentIssues.map(issue => issue.message).join(" / ")}` : draft.approvedExceptions.length ? "필수 검증 통과 · 휴식 편차는 승인된 예외로 기록됩니다." : "모든 필수 검증을 통과했습니다.");
+    setMessage(currentIssues.length ? `검증 실패: ${currentIssues.map(issue => issue.message).join(" / ")}` : draft.approvedExceptions.length ? "필수 검증 통과 · 휴식 예외는 승인 기록으로 저장됩니다." : "모든 필수 검증을 통과했습니다.");
     return currentIssues.length === 0;
   };
 
@@ -304,8 +323,14 @@ export default function BadmintonBoardPage() {
     return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   };
 
+  const toggleSummary = () => {
+    if (!showSummary && rounds.length) setSelectedSummaryRoundNumber(rounds.at(-1)!.round);
+    setShowSummary(value => !value);
+  };
+
   if (!session) return null;
   const summaryValidation = validateSchedule(players, rounds);
+  const selectedSummaryRound = rounds.find(round => round.round === selectedSummaryRoundNumber) || rounds.at(-1) || null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br p-4 py-8">
@@ -318,6 +343,7 @@ export default function BadmintonBoardPage() {
         <section className="bg-white rounded-3xl border p-5 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">이번 라운드 선택</h1><p className="text-sm text-gray-400 mt-1">경기·휴식·단식을 자유롭게 선택하고 만들기 버튼에서 검증합니다.</p></div>{!draft && <div className="flex gap-2"><Button variant="outline" onClick={() => persist({ ...session, restOrder: [...restOrder].sort(() => Math.random() - 0.5) })} disabled={rounds.length > 0}><Shuffle className="w-4 h-4 mr-2" />순서 섞기</Button><Button onClick={applySuggested}>추천 적용</Button></div>}</div>
           <div className="mt-4 rounded-xl border bg-gray-50 p-3 text-sm"><b>휴식 기준:</b> {session.settings.restGapMode === "fixed" ? `세션 고정 · ${session.settings.fixedMinimumGap}라운드 차이` : "라운드별 동적 계산"} · <b>현재 구성:</b> 휴식 {lineup.effectiveRestIds.size}명{lineup.automaticRestIds.size ? ` (자동 ${lineup.automaticRestIds.size}명)` : ""} · 단식 {lineup.soloIds.size}명 · 복식 {lineup.doublesPlayerCount}명</div>
+          {directRestWarnings.length > 0 && <div className="mt-3 rounded-xl border border-amber-400/50 bg-amber-500/10 p-3 text-sm text-amber-800"><b className="block">최근 휴식 참가자 직접 지정</b><span>{directRestWarnings.map(({ player, previousRound, actualGap, minimumGap }) => `${player.name}: ${previousRound}라운드 휴식 · 현재 간격 ${actualGap}, 기준 ${minimumGap}`).join(" / ")}</span><span className="block mt-1">경고 후에도 휴식 배치는 가능하며, 최소 휴식 간격 예외로 기록됩니다.</span></div>}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2 mt-5">
             {players.map(player => {
               const resting = selectedRestIds.has(player.id);
@@ -335,7 +361,7 @@ export default function BadmintonBoardPage() {
         </section>
 
         <section className="bg-white rounded-3xl border p-5 md:p-7">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-bold">게임 배치</h2><p className="text-sm text-gray-400 mt-1">팀 구분 없이 복식 4명, 단식 2명으로 구성합니다.</p></div>{draft && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={undoMove} disabled={!undoStack.length}><Undo2 className="w-4 h-4" /></Button><Button variant="outline" onClick={redoMove} disabled={!redoStack.length}><Redo2 className="w-4 h-4" /></Button><Button variant="outline" onClick={() => createDraft(Boolean(draft.approvedExceptions.length))}><Shuffle className="w-4 h-4 mr-2" />다시 배치</Button><Button variant="outline" onClick={() => clearDraft()}><RotateCcw className="w-4 h-4 mr-2" />선택으로 돌아가기</Button></div>}</div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-bold">게임 배치</h2><p className="text-sm text-gray-400 mt-1">팀 구분 없이 복식 4명, 단식 2명으로 구성합니다.</p></div>{draft && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={undoMove} disabled={!undoStack.length}><Undo2 className="w-4 h-4" /></Button><Button variant="outline" onClick={redoMove} disabled={!redoStack.length}><Redo2 className="w-4 h-4" /></Button><Button variant="outline" onClick={() => createDraft(draft.approvedExceptions.some(exception => exception.code === "rest_imbalance"))}><Shuffle className="w-4 h-4 mr-2" />다시 배치</Button><Button variant="outline" onClick={() => clearDraft()}><RotateCcw className="w-4 h-4 mr-2" />선택으로 돌아가기</Button></div>}</div>
           {!draft && <div className="py-16 text-center text-gray-400">상단에서 참가자 상태를 선택하고 게임을 만들어주세요.</div>}
           {alternatives.length > 1 && <div className="flex gap-2 mt-5">{alternatives.map((candidate, index) => <Button key={index} size="sm" variant={draft === candidate ? "default" : "outline"} onClick={() => { if (draft) setUndoStack(stack => [...stack, draft]); setDraft(candidate); }}>후보 {index + 1}</Button>)}</div>}
           {draft && <div className="grid grid-cols-1 gap-4 mt-6">{draft.courts.map((court, courtIndex) => {
@@ -358,32 +384,35 @@ export default function BadmintonBoardPage() {
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={undoConfirmedRound}><Undo2 className="w-4 h-4 mr-1" />마지막 확정 취소</Button>
               {undoneRound && <Button variant="outline" size="sm" onClick={restoreConfirmedRound}><Redo2 className="w-4 h-4 mr-1" />복원</Button>}
-              {session.settings.showSessionSummary && <Button size="sm" onClick={() => setShowSummary(value => !value)}><Clock3 className="w-4 h-4 mr-1" />{showSummary ? "요약 닫기" : "세션 요약"}</Button>}
+              {session.settings.showSessionSummary && <Button size="sm" onClick={toggleSummary}><Clock3 className="w-4 h-4 mr-1" />{showSummary ? "요약 닫기" : "요약 보기"}</Button>}
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2 mt-4">
-            {rounds.map(round => <span key={round.round} className={`rounded-full border px-3 py-2 text-sm ${round.approvedExceptions.length ? "border-amber-400 bg-amber-500/10" : "bg-gray-50"}`}>{round.round}R · 휴식 {round.resting.map(player => player.name).join("·") || "없음"}{round.approvedExceptions.length ? ` · 예외 편차 ${round.approvedExceptions[0].spread}` : ""}</span>)}
           </div>
           {showSummary && <div className="mt-5 space-y-4">
             <div className="grid sm:grid-cols-3 gap-3">
               <div className="rounded-2xl bg-gray-50 p-4"><b>확정 경기</b><p className="text-2xl mt-1">{rounds.reduce((sum, round) => sum + round.courts.length, 0)}게임</p></div>
               <div className="rounded-2xl bg-gray-50 p-4"><b>최대 휴식 편차</b><p className="text-2xl mt-1">{summaryValidation.maximumCumulativeRestSpread}</p></div>
               <div className="rounded-2xl bg-gray-50 p-4"><b>승인 예외</b><p className="text-2xl mt-1">{summaryValidation.approvedIssues.length}건</p></div>
-              <div className="sm:col-span-3 rounded-2xl bg-gray-50 p-4 text-sm"><b className="block mb-2">참가자별 누적 휴식</b>{Object.entries(summaryValidation.restCounts).map(([name, count]) => `${name} ${count}회`).join(" · ")}</div>
             </div>
-            <div className="space-y-3">
-              <h3 className="text-lg font-bold">라운드별 게임 기록</h3>
-              {rounds.map(round => <article key={round.round} className={`rounded-2xl border p-4 ${round.approvedExceptions.length ? "border-amber-400/40 bg-amber-500/5" : "bg-gray-50"}`}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div><h4 className="text-lg font-bold">{round.round}라운드</h4><p className="text-sm text-gray-400 mt-1">휴식: {round.resting.map(player => player.name).join(" · ") || "없음"}</p></div>
-                  <span className="rounded-full border px-3 py-1 text-xs">휴식 기준 {round.restRule.minimumGap}라운드 · {round.restRule.mode === "fixed" ? "세션 고정" : "라운드별 동적"}</span>
-                </div>
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-2 mt-4">
-                  {round.courts.map((court, courtIndex) => <div key={courtIndex} className="rounded-xl border border-white/10 bg-white/5 p-3"><div className="flex items-center justify-between gap-2"><b>게임 {courtIndex + 1}</b><span className="text-xs text-gray-400">{court.type === "singles" ? "단식" : "복식"}</span></div><p className="mt-2 leading-6">{court.players.map(player => player.name).join(" · ")}</p></div>)}
-                </div>
-                {round.approvedExceptions.length > 0 && <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-200">{round.approvedExceptions.map(exception => `휴식 편차 ${exception.spread} 예외 승인 · 사유: ${exception.reason}`).join(" / ")}</div>}
-              </article>)}
+            <div>
+              <h3 className="text-sm font-bold text-gray-500">라운드 선택</h3>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {rounds.map(round => <Button key={round.round} size="sm" variant={selectedSummaryRound?.round === round.round ? "default" : "outline"} onClick={() => setSelectedSummaryRoundNumber(round.round)} className={round.approvedExceptions.length ? "border-amber-400" : ""}>{round.round}R</Button>)}
+              </div>
             </div>
+            {selectedSummaryRound && <article className={`rounded-3xl border p-4 md:p-6 ${selectedSummaryRound.approvedExceptions.length ? "border-amber-400/40 bg-amber-500/5" : "bg-gray-50"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-xl font-bold">{selectedSummaryRound.round}라운드</h4>
+                <span className="rounded-full border px-3 py-1 text-xs">휴식 기준 {selectedSummaryRound.restRule.minimumGap}라운드 · {selectedSummaryRound.restRule.mode === "fixed" ? "세션 고정" : "라운드별 동적"}</span>
+              </div>
+              <div className="mx-auto mt-5 max-w-2xl rounded-2xl border border-blue-200 bg-blue-50 p-4 text-center">
+                <b className="text-sm text-blue-700">휴식</b>
+                <div className="mt-2 flex flex-wrap justify-center gap-2">{selectedSummaryRound.resting.length ? selectedSummaryRound.resting.map(player => <span key={player.id} className="rounded-full border border-blue-200 bg-white px-3 py-1.5 font-semibold text-blue-900">{player.name}</span>) : <span className="text-sm text-gray-400">휴식자 없음</span>}</div>
+              </div>
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-5">
+                {selectedSummaryRound.courts.map((court, courtIndex) => <div key={courtIndex} className="rounded-2xl border bg-white p-4"><div className="flex items-center justify-between gap-2"><b>팀 {courtIndex + 1}</b><span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-500">{court.type === "singles" ? "단식" : "복식"}</span></div><div className="mt-3 flex flex-wrap gap-2">{court.players.map(player => <span key={player.id} className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-sm font-medium">{player.name}</span>)}</div></div>)}
+              </div>
+              {selectedSummaryRound.approvedExceptions.length > 0 && <div className="mt-4 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-800">{selectedSummaryRound.approvedExceptions.map(exception => { const names = selectedSummaryRound.resting.filter(player => exception.playerIds.includes(player.id)).map(player => player.name).join(" · "); return `${names ? `${names}: ` : ""}${exception.priorRestRound === undefined ? exceptionLabel(exception) : `${exception.priorRestRound}→${selectedSummaryRound.round}라운드 휴식 간격 ${exception.actualGap}, 기준 ${exception.minimumGap} · 예외 승인`} · 사유: ${exception.reason}`; }).join(" / ")}</div>}
+            </article>}
           </div>}
         </section>}
         <Footer />

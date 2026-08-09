@@ -41,11 +41,14 @@ export type ValidationCode =
 
 export interface ApprovedException {
   id: string;
-  code: "rest_imbalance";
+  code: "rest_imbalance" | "minimum_rest_gap";
   round: number;
   approvedAt: string;
   reason: string;
-  spread: number;
+  spread?: number;
+  priorRestRound?: number;
+  actualGap?: number;
+  minimumGap?: number;
   playerIds: number[];
 }
 
@@ -107,6 +110,7 @@ export interface ManualRoundOptions {
   restGapMode: RestGapMode;
   fixedMinimumGap: number;
   allowRestImbalance?: boolean;
+  allowMinimumRestGapPlayerIds?: number[];
   exceptionReason?: string;
   candidateIndex?: number;
 }
@@ -224,8 +228,12 @@ const pairKey = (a: SchedulePlayer, b: SchedulePlayer) =>
   [a.id, b.id].sort((x, y) => x - y).join(":");
 
 function isApproved(round: ScheduleRound, issue: ValidationIssue) {
-  return issue.code === "rest_imbalance"
-    && round.approvedExceptions.some(exception => exception.code === issue.code && exception.round === issue.round);
+  return round.approvedExceptions.some(exception => {
+    if (exception.code !== issue.code || exception.round !== issue.round) return false;
+    if (issue.code === "rest_imbalance") return true;
+    return issue.code === "minimum_rest_gap"
+      && (issue.playerIds || []).every(id => exception.playerIds.includes(id));
+  });
 }
 
 export function validateSchedule(players: SchedulePlayer[], rounds: ScheduleRound[]): ScheduleValidation {
@@ -689,25 +697,47 @@ export function generateManualRound(
   let validation = validateSchedule(players, [...previousRounds, round]);
   const currentIssues = validation.issues.filter(issue => issue.round === roundNumber);
   const restIssues = currentIssues.filter(issue => issue.code === "rest_imbalance");
-  const blockingIssues = currentIssues.filter(issue => issue.code !== "rest_imbalance");
+  const allowedMinimumRestGapIds = new Set(options.allowMinimumRestGapPlayerIds || []);
+  const approvedMinimumRestGapIssues = currentIssues.filter(issue => issue.code === "minimum_rest_gap"
+    && (issue.playerIds || []).length > 0
+    && (issue.playerIds || []).every(id => allowedMinimumRestGapIds.has(id)));
+  const approvedMinimumRestGapIssueSet = new Set(approvedMinimumRestGapIssues);
+  const blockingIssues = currentIssues.filter(issue => issue.code !== "rest_imbalance" && !approvedMinimumRestGapIssueSet.has(issue));
   if (blockingIssues.length) throw new ScheduleRuleError(blockingIssues.map(issue => issue.message).join(" / "), blockingIssues.map(issue => issue.code));
   if (restIssues.length && !options.allowRestImbalance) {
     throw new ScheduleRuleError(restIssues.map(issue => issue.message).join(" / "), ["rest_imbalance"]);
   }
+  const approvedExceptions: ApprovedException[] = approvedMinimumRestGapIssues.map((issue, index) => {
+    const playerId = issue.playerIds?.[0];
+    const priorRestRound = playerId === undefined
+      ? undefined
+      : [...previousRounds].reverse().find(previous => previous.resting.some(player => player.id === playerId))?.round;
+    return {
+      id: `rest-gap-${roundNumber}-${index}-${Date.now()}`,
+      code: "minimum_rest_gap",
+      round: roundNumber,
+      approvedAt: new Date().toISOString(),
+      reason: "사용자가 직접 휴식으로 지정",
+      priorRestRound,
+      actualGap: priorRestRound === undefined ? undefined : roundNumber - priorRestRound,
+      minimumGap: restRule.minimumGap,
+      playerIds: issue.playerIds || [],
+    };
+  });
   if (restIssues.length && options.allowRestImbalance) {
     const spread = validation.cumulativeRestSpreads.at(-1) || 0;
-    round = {
-      ...round,
-      approvedExceptions: [{
-        id: `rest-${roundNumber}-${Date.now()}`,
-        code: "rest_imbalance",
-        round: roundNumber,
-        approvedAt: new Date().toISOString(),
-        reason: options.exceptionReason?.trim() || "사용자 승인",
-        spread,
-        playerIds: resting.map(player => player.id),
-      }],
-    };
+    approvedExceptions.push({
+      id: `rest-${roundNumber}-${Date.now()}`,
+      code: "rest_imbalance",
+      round: roundNumber,
+      approvedAt: new Date().toISOString(),
+      reason: options.exceptionReason?.trim() || "사용자 승인",
+      spread,
+      playerIds: resting.map(player => player.id),
+    });
+  }
+  if (approvedExceptions.length) {
+    round = { ...round, approvedExceptions };
     validation = validateSchedule(players, [...previousRounds, round]);
   }
   return { round, validation };

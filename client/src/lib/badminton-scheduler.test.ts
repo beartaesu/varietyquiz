@@ -265,4 +265,26 @@ describe("휴식 기준과 승인 예외", () => {
     }).round;
     expect(validateSchedule(roster, [first, repeated]).issues.filter(issue => issue.code === "duplicate_rest_group")).toEqual([]);
   });
+
+  it("직접 휴식으로 지정한 참가자는 최소 휴식 간격 예외를 기록하고 허용한다", () => {
+    const roster = players(8);
+    const options = { restGapMode: "fixed" as const, fixedMinimumGap: 3 };
+    const first = generateManualRound(roster, roster.slice(0, 4), [], 1, [], options).round;
+    const second = generateManualRound(roster, roster.slice(4), [first], 1, [], options).round;
+    const selectedRestIds = roster.slice(0, 4).map(player => player.id);
+
+    expect(() => generateManualRound(roster, roster.slice(0, 4), [first, second], 1, [], options)).toThrow(ScheduleRuleError);
+
+    const third = generateManualRound(roster, roster.slice(0, 4), [first, second], 1, [], {
+      ...options,
+      allowMinimumRestGapPlayerIds: selectedRestIds,
+    }).round;
+    const validation = validateSchedule(roster, [first, second, third]);
+
+    expect(third.approvedExceptions.every(exception => exception.code === "minimum_rest_gap")).toBe(true);
+    expect(new Set(third.approvedExceptions.flatMap(exception => exception.playerIds))).toEqual(new Set(selectedRestIds));
+    expect(third.approvedExceptions.every(exception => exception.priorRestRound === 1 && exception.actualGap === 2 && exception.minimumGap === 3)).toBe(true);
+    expect(validation.issues.filter(issue => issue.round === 3)).toEqual([]);
+    expect(validation.approvedIssues.filter(issue => issue.round === 3 && issue.code === "minimum_rest_gap")).toHaveLength(4);
+  });
 });
