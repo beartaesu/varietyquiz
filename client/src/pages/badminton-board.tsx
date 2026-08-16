@@ -89,8 +89,12 @@ export default function BadmintonBoardPage() {
   const players = session?.players || [];
   const restOrder = session?.restOrder || [];
   const lineup = useMemo(
-    () => calculateFlexibleLineup(players, session?.requestedCourts || 0, selectedRestIds, selectedSoloIds, restOrder, selectedGameIds),
-    [players, session?.requestedCourts, selectedRestIds, selectedSoloIds, restOrder, selectedGameIds],
+    () => calculateFlexibleLineup(players, session?.requestedCourts || 0, selectedRestIds, selectedSoloIds, restOrder, selectedGameIds, session ? {
+      previousRounds: rounds,
+      restGapMode: session.settings.restGapMode,
+      fixedMinimumGap: session.settings.fixedMinimumGap,
+    } : undefined),
+    [players, restOrder, rounds, selectedGameIds, selectedRestIds, selectedSoloIds, session],
   );
   const historicalValidation = useMemo(() => validateSchedule(players, rounds), [players, rounds]);
   const restCounts = historicalValidation.restCounts;
@@ -111,9 +115,6 @@ export default function BadmintonBoardPage() {
 
     return available;
   }, [draft, players, rounds, selectedSlot]);
-  const defaultDoublesCourts = session ? Math.min(session.requestedCourts, Math.floor(players.length / 4)) : 0;
-  const defaultSinglesCount = players.length >= 2 && players.length < 4 ? 2 : 0;
-  const defaultRestCount = players.length - defaultDoublesCourts * 4 - defaultSinglesCount;
   const directRestWarnings = useMemo(() => {
     if (!session || !selectedRestIds.size) return [];
     const minimumGap = session.settings.restGapMode === "fixed" && session.settings.fixedMinimumGap === 0 && lineup.effectiveRestIds.size
@@ -208,11 +209,11 @@ export default function BadmintonBoardPage() {
   };
 
   const applySuggested = () => {
-    setSelectedRestIds(new Set(restOrder.slice(0, defaultRestCount)));
-    setSelectedSoloIds(new Set(defaultSinglesCount ? restOrder.slice(defaultRestCount, defaultRestCount + defaultSinglesCount) : []));
+    setSelectedRestIds(new Set());
+    setSelectedSoloIds(new Set());
     setSelectedGameIds(new Set());
     setApprovalNeeded(false);
-    setMessage("");
+    setMessage("누적 휴식 횟수와 최근 휴식 라운드를 반영해 자동 추천했습니다.");
   };
 
   const swapSlots = (from: Slot, to: Slot) => {

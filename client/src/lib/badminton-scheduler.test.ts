@@ -17,6 +17,16 @@ const players = (count: number): SchedulePlayer[] => Array.from({ length: count 
   skill: index % 6,
 }));
 
+const restOnlyRound = (roster: SchedulePlayer[], round: number, restId: number): ScheduleRound => ({
+  round,
+  resting: [roster.find(player => player.id === restId)!],
+  courts: [],
+  courtLimit: 2,
+  restRule: calculateRestRule(roster.length, 1, "fixed", 3),
+  approvedExceptions: [],
+  createdAt: new Date(round).toISOString(),
+});
+
 const fixedOptions = { restGapMode: "fixed" as const, fixedMinimumGap: 1 };
 
 describe("유연한 인원 구성", () => {
@@ -39,6 +49,31 @@ describe("유연한 인원 구성", () => {
     expect([...second.automaticRestIds]).toEqual([2]);
     const fixed = calculateFlexibleLineup(roster, 3, new Set(), new Set(), rotatedOrder, new Set([2]));
     expect([...fixed.automaticRestIds]).toEqual([3]);
+  });
+
+  it("자동 휴식은 순번보다 누적 휴식 횟수가 적은 참가자를 우선한다", () => {
+    const roster = players(9);
+    const previousRounds = [restOnlyRound(roster, 1, 1)];
+    const result = calculateFlexibleLineup(roster, 2, new Set(), new Set(), roster.map(player => player.id), new Set(), {
+      previousRounds,
+      restGapMode: "fixed",
+      fixedMinimumGap: 1,
+    });
+
+    expect([...result.automaticRestIds]).toEqual([2]);
+  });
+
+  it("휴식 횟수가 같으면 최소 간격을 지키면서 가장 오래전에 쉰 참가자를 우선한다", () => {
+    const roster = players(9);
+    const previousRounds = roster.map((player, index) => restOnlyRound(roster, index + 1, player.id));
+    const restOrder = [9, 1, 2, 3, 4, 5, 6, 7, 8];
+    const result = calculateFlexibleLineup(roster, 2, new Set(), new Set(), restOrder, new Set(), {
+      previousRounds,
+      restGapMode: "fixed",
+      fixedMinimumGap: 3,
+    });
+
+    expect([...result.automaticRestIds]).toEqual([1]);
   });
 
   it("유효한 모든 기본 조합은 참가자를 정확히 한 번 분류한다", () => {

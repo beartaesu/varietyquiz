@@ -97,6 +97,12 @@ export interface FlexibleLineup {
   message: string;
 }
 
+export interface RestSelectionContext {
+  previousRounds: ScheduleRound[];
+  restGapMode: RestGapMode;
+  fixedMinimumGap: number;
+}
+
 export interface RepeatRuleSnapshot {
   opponentCapacity: number;
   previousEncounterSlots: number;
@@ -171,11 +177,16 @@ export function calculateFlexibleLineup(
   soloIds: Set<number>,
   restOrder: number[],
   explicitGameIds: Set<number> = new Set(),
+  restContext?: RestSelectionContext,
 ): FlexibleLineup {
-  const ordered = [
-    ...restOrder.map(id => players.find(player => player.id === id)).filter((player): player is SchedulePlayer => Boolean(player)),
-    ...players.filter(player => !restOrder.includes(player.id)),
-  ];
+  const playerById = new Map(players.map(player => [player.id, player]));
+  const seenOrderIds = new Set<number>();
+  const normalizedRestOrder = [...restOrder, ...players.map(player => player.id)].filter(id => {
+    if (!playerById.has(id) || seenOrderIds.has(id)) return false;
+    seenOrderIds.add(id);
+    return true;
+  });
+  const ordered = normalizedRestOrder.map(id => playerById.get(id)!);
   const shouldAutoCreateSingles = requestedCourts > 0
     && players.length >= 2
     && players.length < 4
@@ -198,7 +209,33 @@ export function calculateFlexibleLineup(
     : 0;
   const doublesPlayerCount = doublesGames * 4;
   const automaticRestCount = Math.max(0, remaining.length - doublesPlayerCount);
-  const automaticRestCandidates = remaining.filter(player => !explicitGameIds.has(player.id));
+  const effectiveRestCount = explicitRestIds.size + automaticRestCount;
+  const previousRounds = restContext?.previousRounds || [];
+  const minimumGap = restContext
+    ? restContext.restGapMode === "fixed" && restContext.fixedMinimumGap === 0 && effectiveRestCount > 0
+      ? calculateRestRule(players.length, effectiveRestCount, "dynamic").minimumGap
+      : calculateRestRule(players.length, effectiveRestCount, restContext.restGapMode, restContext.fixedMinimumGap).minimumGap
+    : 0;
+  const nextRound = previousRounds.length + 1;
+  const restRoundsByPlayer = new Map(players.map(player => [
+    player.id,
+    previousRounds.filter(round => round.resting.some(resting => resting.id === player.id)).map(round => round.round),
+  ]));
+  const orderRank = new Map(normalizedRestOrder.map((id, index) => [id, index]));
+  const automaticRestCandidates = remaining
+    .filter(player => !explicitGameIds.has(player.id))
+    .sort((first, second) => {
+      const firstRounds = restRoundsByPlayer.get(first.id) || [];
+      const secondRounds = restRoundsByPlayer.get(second.id) || [];
+      const firstLast = firstRounds.at(-1);
+      const secondLast = secondRounds.at(-1);
+      const firstGapAllowed = firstLast === undefined || nextRound - firstLast >= minimumGap;
+      const secondGapAllowed = secondLast === undefined || nextRound - secondLast >= minimumGap;
+      if (firstGapAllowed !== secondGapAllowed) return firstGapAllowed ? -1 : 1;
+      if (firstRounds.length !== secondRounds.length) return firstRounds.length - secondRounds.length;
+      if (firstLast !== secondLast) return (firstLast ?? Number.NEGATIVE_INFINITY) - (secondLast ?? Number.NEGATIVE_INFINITY);
+      return (orderRank.get(first.id) || 0) - (orderRank.get(second.id) || 0);
+    });
   const automaticRestIds = new Set(automaticRestCandidates.slice(0, automaticRestCount).map(player => player.id));
   const forcedGameRested = automaticRestCandidates.length < automaticRestCount;
   const effectiveRestIds = new Set([...explicitRestIds, ...automaticRestIds]);

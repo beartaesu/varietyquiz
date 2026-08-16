@@ -41,6 +41,16 @@ export const defaultFeatureFlags: BadmintonFeatureFlags = {
   showSessionSummary: true,
 };
 
+function normalizeRestOrder(players: SchedulePlayer[], restOrder: number[] = []): number[] {
+  const playerIds = new Set(players.map(player => player.id));
+  const seen = new Set<number>();
+  return [...restOrder, ...players.map(player => player.id)].filter(id => {
+    if (!playerIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 export function createSession(input: {
   name?: string;
   players: SchedulePlayer[];
@@ -59,7 +69,7 @@ export function createSession(input: {
     updatedAt: now,
     players: input.players,
     requestedCourts: input.requestedCourts,
-    restOrder: input.restOrder,
+    restOrder: normalizeRestOrder(input.players, input.restOrder),
     rounds: [],
     settings: {
       restGapMode: input.restGapMode,
@@ -76,7 +86,7 @@ export function normalizeSession(value: BadmintonSession): BadmintonSession {
     ...value,
     version: BADMINTON_SESSION_VERSION,
     rounds: value.rounds || [],
-    restOrder: value.restOrder?.length ? value.restOrder : value.players.map(player => player.id),
+    restOrder: normalizeRestOrder(value.players, value.restOrder),
     settings: {
       restGapMode: incomingSettings.restGapMode || "fixed",
       fixedMinimumGap: incomingSettings.fixedMinimumGap || 0,
