@@ -15,7 +15,8 @@
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "migrate:v1-content": "tsx scripts/migrate-v1-content.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

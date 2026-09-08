@@ -34,6 +34,9 @@ jobs:
       - name: Check migration history
         run: npm run db:check
 
+      - name: Verify content migration dry-run
+        run: npm run migrate:v1-content
+
       - name: Lint
         run: npm run lint
 

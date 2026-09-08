@@ -41,6 +41,14 @@ npm run db:seed
 
 스키마를 변경했다면 `npm run db:generate -- --name=<변경명>`으로 새 순방향 마이그레이션을 생성합니다. 운영 DB에는 `drizzle-kit push`를 사용하지 않습니다. 자세한 절차는 `docs/DATABASE_OPERATIONS.md`에 있습니다.
 
+V1 콘텐츠 이관은 기본 미리보기 명령으로 먼저 확인합니다.
+
+```powershell
+npm run migrate:v1-content
+```
+
+실제 저장에는 별도의 `--apply` 옵션이 필요합니다. 자세한 입력·제외·재실행 규칙은 `docs/CONTENT_MIGRATION.md`에 있습니다.
+
 ## 환경 변수
 
 `.env.example`을 `.env.local`로 복사해 사용합니다. 현재 기반 단계에서는 외부 서비스 비밀값이 필요하지 않습니다.
@@ -52,3 +60,4 @@ npm run db:seed
 - `docs/V2_MIGRATION.md`: 단계별 이관 계획
 - `docs/P0_TASKS.md`: P0 실행 작업과 완료 조건
 - `docs/DATABASE_OPERATIONS.md`: DB 변경·백업·복원 원칙
+- `docs/CONTENT_MIGRATION.md`: V1 콘텐츠 이관 도구와 안전 규칙

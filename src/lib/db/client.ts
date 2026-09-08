@@ -1,9 +1,6 @@
 import "server-only";
 
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-
-import * as schema from "./schema";
+import { createDatabaseConnection } from "./connection-factory";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -11,19 +8,17 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required for database access.");
 }
 
+type DatabaseConnection = ReturnType<typeof createDatabaseConnection>;
 const globalForDatabase = globalThis as unknown as {
-  varietyQuizSql?: ReturnType<typeof postgres>;
+  varietyQuizConnection?: DatabaseConnection;
 };
 
-export const sqlClient =
-  globalForDatabase.varietyQuizSql ??
-  postgres(databaseUrl, {
-    max: process.env.NODE_ENV === "production" ? 10 : 1,
-    prepare: false,
-  });
+const connection =
+  globalForDatabase.varietyQuizConnection ??
+  createDatabaseConnection(databaseUrl, process.env.NODE_ENV === "production" ? 10 : 1);
 
 if (process.env.NODE_ENV !== "production") {
-  globalForDatabase.varietyQuizSql = sqlClient;
+  globalForDatabase.varietyQuizConnection = connection;
 }
 
-export const db = drizzle(sqlClient, { schema });
+export const { db, sqlClient } = connection;

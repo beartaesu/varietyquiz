@@ -334,6 +334,23 @@ export const auditLogs = pgTable(
   ],
 );
 
+export const migrationSourceMaps = pgTable(
+  "migration_source_maps",
+  {
+    sourceSystem: varchar("source_system", { length: 80 }).notNull(),
+    sourceId: varchar("source_id", { length: 200 }).notNull(),
+    entityType: varchar("entity_type", { length: 80 }).notNull(),
+    targetId: uuid("target_id").notNull(),
+    checksum: varchar("checksum", { length: 64 }).notNull(),
+    migratedAt: timestamp("migrated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.sourceSystem, table.sourceId, table.entityType] }),
+    uniqueIndex("migration_source_maps_target_unique").on(table.entityType, table.targetId),
+    check("migration_source_maps_checksum_length", sql`char_length(${table.checksum}) = 64`),
+  ],
+);
+
 export type Content = typeof contents.$inferSelect;
 export type NewContent = typeof contents.$inferInsert;
 export type Candidate = typeof candidates.$inferSelect;

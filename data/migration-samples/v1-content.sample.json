@@ -1,0 +1,61 @@
+[
+  {
+    "sourceId": "editorial-weekend-balance",
+    "sourceKind": "editorial",
+    "type": "vs",
+    "slug": "weekend-energy-balance",
+    "title": "주말 에너지 충전법 VS",
+    "summary": "주말에 새로운 자극을 찾는 방식과 익숙한 공간에서 온전히 쉬는 방식을 비교합니다.",
+    "body": "바쁜 한 주가 끝난 뒤 필요한 회복 방식은 사람마다 다릅니다. 이번 선택은 밖에서 새로운 장면을 만나는 시간과 집에서 조용히 에너지를 채우는 시간을 비교합니다.",
+    "categorySlug": "daily-life",
+    "candidates": [
+      {
+        "name": "새로운 장소 찾아가기",
+        "description": "가보지 않은 동네를 걷거나 가까운 여행지에서 새로운 경험을 만듭니다.",
+        "rightsStatus": "original",
+        "rightsNote": "Variety Quiz V2 original text"
+      },
+      {
+        "name": "익숙한 공간에서 쉬기",
+        "description": "좋아하는 음악과 음식을 곁에 두고 아무 일정 없이 천천히 회복합니다.",
+        "rightsStatus": "original",
+        "rightsNote": "Variety Quiz V2 original text"
+      }
+    ]
+  },
+  {
+    "sourceId": "legacy-celebrity-example",
+    "sourceKind": "v1-celebrity",
+    "type": "vs",
+    "slug": "legacy-celebrity-example",
+    "title": "V1 연예인 자료 예시",
+    "summary": "기존 연예인 자료는 이미지와 인물 정보의 권리를 확인하기 전에는 자동으로 이관하지 않습니다.",
+    "body": "이 항목은 실제 공개용 콘텐츠가 아닙니다. V1 연예인 자료가 자동 이관 대상에서 제외되는 정책을 검증하기 위한 샘플입니다.",
+    "categorySlug": "daily-life",
+    "candidates": [
+      {
+        "name": "검토 필요 후보 A",
+        "description": "권리 검토 전 자료입니다.",
+        "rightsStatus": "unknown",
+        "rightsNote": ""
+      },
+      {
+        "name": "검토 필요 후보 B",
+        "description": "권리 검토 전 자료입니다.",
+        "rightsStatus": "unknown",
+        "rightsNote": ""
+      }
+    ]
+  },
+  {
+    "sourceId": "invalid-short-copy",
+    "sourceKind": "editorial",
+    "type": "vs",
+    "slug": "invalid-short-copy",
+    "title": "짧음",
+    "summary": "설명 부족",
+    "body": "본문 부족",
+    "categorySlug": "daily-life",
+    "candidates": []
+  }
+]
