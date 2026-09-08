@@ -5,7 +5,7 @@
 
 ## P0-01 Next.js 기반과 품질 게이트
 
-상태: `ready`
+상태: `done` (2026-09-08)
 
 목표: 현재 Vite 셸을 Next.js App Router 기반으로 교체하고 모든 후속 기능이 따를 기준을 만든다.
 
@@ -25,6 +25,15 @@
 - 비밀값이나 V1 런타임 의존성이 없다.
 
 제외: DB, 로그인, 광고 코드.
+
+완료 기록:
+
+- Next.js 16.3.4 App Router, React 19.2.8, TypeScript 5.9.3, Tailwind CSS 4.3.3
+- 서버 렌더링 홈, 404, 구간 오류, 전역 오류 화면
+- TypeScript, ESLint, Vitest, 프로덕션 빌드 품질 게이트
+- GitHub Actions Node.js 22 CI
+- 접근 가능한 랜드마크와 콘텐츠 구조 단위 테스트 2개
+- 전체 npm 의존성 보안 감사 0건
 
 ## P0-02 핵심 DB 스키마와 마이그레이션
 

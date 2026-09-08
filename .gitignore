@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.next/
+out/
+coverage/
 .env
 .env.*
 !.env.example
@@ -7,3 +10,4 @@ dist/
 .DS_Store
 .vscode/
 *.tsbuildinfo
+next-env.d.ts
