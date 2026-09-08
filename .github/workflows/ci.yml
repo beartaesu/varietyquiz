@@ -31,6 +31,9 @@ jobs:
       - name: Type check
         run: npm run check
 
+      - name: Check migration history
+        run: npm run db:check
+
       - name: Lint
         run: npm run lint
 
